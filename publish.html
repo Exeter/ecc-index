@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>ACE in Action</title>
+<style type="text/css" media="screen">
+html, body {
+  margin:0;
+  padding:0;
+  overflow:hidden;
+}
+#editor { 
+  position: relative;
+  height:500px;
+  width:100%;
+}
+.main {
+  width:100%;
+  height:100%;
+}
+.header, .footer {
+  height:35px;
+  line-height:35px;
+  color:#fff;
+  font-family:sans-serif;
+  padding-left:5px;
+  background-color:#722;
+  background:-webkit-linear-gradient(#933, #711);
+  background:-moz-linear-gradient(top, #933, #711);
+}
+.header {
+  font-size:25px;
+  border-bottom:1px solid #DAA520;
+}
+.footer {
+  border-top:1px solid #DAA520;
+  font-size:18px;
+}
+.password, .title {
+  color:#fff;
+  border:none;
+  border-radius:3px;
+  background:none;
+  height:100%;
+  outline:none;
+}
+.password {
+  font-size:18px;
+}
+.title {
+  font-size:25px;
+}
+</style>
+<script src="/jquery.min.js"></script>
+<script src="/md5.js"></script>
+<script src="http://rawgithub.com/ajaxorg/ace-builds/master/src-noconflict/ace.js" type="text/javascript" charset="utf-8"></script>
+<script>
+window.onload = function() {
+  var editor = ace.edit("editor"),
+      editor_element = $("#editor"),
+      title = $(".title"),
+      password = $(".password"),
+      footer = $(".footer");
+  editor.setTheme("ace/theme/eclipse");
+  editor.getSession().setMode("ace/mode/html");
+  $(window).resize(function() {
+    editor_element.height(window.innerHeight - editor_element.offset().top - footer.outerHeight());
+  }).resize();
+  title.focus();
+  password.keydown(function(e) {
+    if (e.keyCode === 13) {
+      var q = new XMLHttpRequest();
+      q.open("POST", "/dynamic/ECC_index/publish?title=" + encodeURIComponent(title.val()) + "&hash=" + encodeURIComponent(md5(md5(password.val()) + (Math.floor((new Date()).getTime()/1000000)*1000), true)));
+      q.setRequestHeader("Content-Type","text/html");
+      q.send(editor.getSession().getValue());
+      q.onreadystatechange = function() {
+        if (q.readyState === 4 && q.status === 200) {
+          console.log((Math.floor((new Date()).getTime()/1000000)*1000));
+          console.log(md5(md5(password.val()) + (Math.floor((new Date()).getTime()/1000000)*1000)));
+        }
+      };
+    }
+  });
+};
+</script>
+</head>
+<body>
+<div class="main">
+  <div class="header">
+    <input class="title" value="{page title}"/>
+  </div>
+  <div class="editor_wrapper">
+    <div id="editor"></div>
+  </div>
+  <div class="footer">
+    password: <input type="password" class="password"/>
+  </div>
+</div>
+</body>
+</html>
+

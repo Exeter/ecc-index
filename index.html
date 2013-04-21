@@ -1,0 +1,239 @@
+<html>
+<!--
+  Copyright (c) 2013 Anthony Bau and Exeter Computing Club
+  MIT license: opensource.org/licenses/MIT
+-->
+<head>
+  <style>
+    body {
+      font-family:arial;
+    }
+    .header_bar {
+      border-radius:5px;
+      border: 1px solid #000;
+      background-color:#811;
+      background:-webkit-linear-gradient(#933, #811);
+      background:-moz-linear-gradient(top, #822, #911);
+    }
+    .big_header {
+      height:50px;
+      font-size:45px;
+      color:#fff;
+      padding-left:10px;
+    }
+    .link_bar {
+      height:30px;
+      border-top:1px solid #DAA520;
+      margin-bottom:0;
+    }
+    .bar_link {
+      display:block;
+      float:left;
+      height:100%;
+      line-height:30px;
+      color:#fff;
+      padding-left:5px;
+      padding-right:5px;
+      text-decoration:none;
+      cursor:hand;
+    }
+    .bar_link:hover {
+      background-color:#a00;
+    }
+    .small_header {
+      height:35px;
+      line-height:35px;
+      background-color:#811;
+      background:-webkit-linear-gradient(#933, #811);
+      background:-moz-linear-gradient(top, #822, #911);
+      color:#fff;
+      font-size:25px;
+      padding-left:5px;
+    }
+    .column { 
+      float:left;
+      height:100%;
+      margin:0;
+      padding:0;
+      border:none;
+    }
+    .portion {
+      border-radius:5px;
+      border:1px solid #000;
+      overflow:hidden;
+      width:100%;
+    }
+    .main {
+      margin-top:10px;
+      width:100%;
+    }
+    .project_list {
+      margin-right:10px;
+    }
+    .news_feed_body {
+      overflow:auto;
+      height:100%;
+    }
+    .news {
+      padding:5px;
+      border-bottom:1px solid #888;
+      overflow:hidden;
+    }
+    .news_header {
+      font-size:50px;
+      border-bottom:1px dotted #000;
+      margin-bottom:5px;
+    }
+    .news_body {
+      padding-left:10px;  
+    }
+    .left {
+      margin-right:10px;
+    }
+    .github_list {
+      margin-top:10px;
+    }
+    .project {
+      padding-left:5px;
+      height:25px;
+      line-height:25px;
+      cursor:pointer;
+    }
+    .project:hover {
+      background-color:#aaa;
+    }
+    .autogen_github_repo_wrapper {
+      width:50%;
+      vertical-align:top;
+      float:left;
+    }
+    .autogen_github_repo {
+      margin-left:5px;
+      margin-right:5px;
+    }
+    .autogen_github_repo_body {
+      padding-left:15px;
+    }
+    .autogen_github_repo_name {
+      font-size:25px;
+      border-bottom:1px dotted #000;
+    }
+    .autogen_github_commit {
+      padding-top:2px;
+      padding-bottom:2px;
+      border-bottom:1px dotted #888;
+    }
+    .autogen_github_commit_meta {
+      font-size:15px;
+    }
+    .autogen_github_message {
+      font-family:monospace;
+      font-size:15px;
+    }
+    .github_link {
+      color:inherit;
+      text-decoration:none;
+    }
+  </style>
+  <script src="/jquery.min.js"></script>
+  <script src="/md5.js"></script>
+  <script>
+    $(function() {
+      var head = $(".header_bar"),
+          main = $(".main"),
+          plist = $(".project_list"),
+          plist_body = $(".project_list_body"),
+          glist = $(".github_list"),
+          glist_body = $(".github_list_body"),
+          left = $(".column.left"),
+          right = $(".column.right"),
+          feed = $(".news_feed"),
+          feed_header = $(".news_feed_header"),
+          feed_body = $(".news_feed_body");
+      $(window).resize(function() {
+        var height = main.height(window.innerHeight - main.offset().top - 10).height(),
+            width = main.width(window.innerWidth - 16).width();
+        head.width(width - 4);
+        left.width((width - 14)*0.2);
+        plist.height((height - 14)*0.4);
+        glist.height((height - 14)*0.6);
+        right.width((width - 14)*0.8);
+        feed.height(height);
+        feed_body.height(height - feed_header.outerHeight());
+      }).resize();
+      var since = Math.ceil((new Date()).getTime()/1000);
+      function loadNext () { 
+        $.ajax({
+          url:"/cgi-bin/index/read_posts?last=" + since,
+          dataType:"json",
+          success:function(data) {
+            for (var i = 0; i < data.posts.length; i += 1) {
+              var news_wrapper = $(document.createElement("div")).addClass("news"),
+                  news_header = $(document.createElement("div")).addClass("news_header").text(data.posts[i].title),
+                  news_body = $(document.createElement("div")).addClass("news_body").html(data.posts[i].body);
+              feed_body.append(news_wrapper.append(news_header).append(news_body));
+            }
+            since = data.last;
+          }
+        });
+      }
+      (function() {
+        loadNext();
+        $.ajax({
+          url:"/projects.json",
+          dataType:"json",
+          success:function(data) {
+            for (var i = 0; i < data.projects.length; i += 1) {
+              glist_body.append($("<div>").addClass("project").append($("<a>").addClass("github_link").attr("href", data.projects[i].url).html("&rsaquo; " + data.projects[i].name)));
+            }
+          }
+        });
+        feed_body.scroll(function() {
+          if (feed_body[0].scrollHeight - feed_body.scrollTop() == feed_body.outerHeight()) {
+            loadNext();
+          }
+        });
+      }());
+    });
+  </script>
+</head>
+<body>
+  <div class="header_bar">
+    <div class="big_header">Exeter Computing Club</div>
+    <div class="link_bar">
+      <a class="bar_link" href="http://csserver.exeter.edu/moodle">moodle</a>
+      <a class="bar_link" href="http://github.com/Exeter">github</a>
+      <a class="bar_link" href="https://docs.google.com/forms/d/1sxdIJS8v9Jb4MZCRhCoZI2UdW_1haAAQrmpvw6Sg8iA/viewform">request</a>
+      <a class="bar_link" href="/publish.html">publish</a>
+      <a class="bar_link" href="/about.html">about</a>
+    </div>
+  </div>
+  <div class="main">
+    <div class="column left">
+      <div class="project_list portion">
+        <div class="small_header">
+          Server Projects
+        </div>
+        <div class="project_list_body">
+        </div>
+      </div>
+      <div class="github_list portion">
+        <div class="small_header">
+          Github Projects
+        </div>
+        <div class="github_list_body">
+        </div>
+      </div>
+    </div>
+    <div class="column right">
+      <div class="news_feed portion">
+        <div class="small_header news_feed_header">
+          Club News
+        </div>
+        <div class="news_feed_body">
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
