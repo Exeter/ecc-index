@@ -4,6 +4,7 @@
   MIT license: opensource.org/licenses/MIT
 -->
 <head>
+  <title>Exeter Computing Club</title>
   <style>
     body {
       font-family:arial;
@@ -130,9 +131,10 @@
       font-family:monospace;
       font-size:15px;
     }
-    .github_link {
+    .github_link, .project_link {
       color:inherit;
       text-decoration:none;
+      display:block;
     }
   </style>
   <script src="/jquery.min.js"></script>
@@ -174,11 +176,25 @@
               feed_body.append(news_wrapper.append(news_header).append(news_body));
             }
             since = data.last;
+            feed_body.scroll(function() {
+              if (feed_body[0].scrollHeight - feed_body.scrollTop() == feed_body.outerHeight()) {
+                loadNext();
+              }
+            });
           }
         });
       }
       (function() {
         loadNext();
+        $.ajax({
+          url:"/cgi-bin/index/server_projects",
+          dataType:"json",
+          success:function(data) {
+            for (var i = 0; i < data.projects.length; i += 1) {
+              plist_body.append($("<div>").addClass("project").append($("<a>").addClass("project_link").attr("href", "/cgi-bin/" + data.projects[i]).html("&rsaquo; " + data.projects[i])));
+            }
+          }
+        });
         $.ajax({
           url:"/projects.json",
           dataType:"json",
@@ -191,6 +207,7 @@
         feed_body.scroll(function() {
           if (feed_body[0].scrollHeight - feed_body.scrollTop() == feed_body.outerHeight()) {
             loadNext();
+            feed_body.unbind("scroll");
           }
         });
       }());
