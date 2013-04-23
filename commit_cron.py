@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import http.client
 import simplejson
+import datetime
+import dateutil.parser
 import sqlite3
 
 def format_post(data):
@@ -46,7 +48,7 @@ def main():
     request.request("GET",("/repos/Exeter/%s/commits" % repository["name"]) + 
                     "?client_id=a951833eb1496c8c32ef" +
                     "&client_secret=f338d8a20721decdae676e58c69a127aafdadafc"+
-                    ("&since=%s0" % since));
+                    ("&since=%s" % since));
     loaded = simplejson.loads(request.getresponse().read());
     for commit in loaded:
       commit_list.append({
@@ -67,6 +69,6 @@ def main():
     cur.execute("INSERT INTO news (timestamp, title, body) VALUES ((JULIANDAY('now') - 2440587.5)*86400.0, 'Automatic Github Updates', ?)", (xml,))
     conn.commit()
     conn.close()
-    open("/srv/http/commit.json","w").write(simplejson.dumps({"since":new_since}))
+    open("/srv/http/commit.json","w").write(simplejson.dumps({"since":(dateutil.parser.parse(new_since) + datetime.timedelta(0,1)).isoformat()[:20]}))
 
 main()
