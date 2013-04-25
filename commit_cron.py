@@ -52,10 +52,10 @@ def main():
     loaded = simplejson.loads(request.getresponse().read());
     for commit in loaded:
       commit_list.append({
-        "committer":commit["author"]["login"],
-        "user_link":"https://github.com/%s" % commit["author"]["login"],
+        "committer":(commit["author"]["login"] if (commit["author"]) else commit["commit"]["author"]["name"]),
+        "user_link":(commit["author"]["html_url"] if (commit["author"]) else "mailto:%s" % commit["commit"]["author"]["email"]),
         "timestamp":commit["commit"]["author"]["date"],
-        "link":"https://github.com/Exeter/%s/commit/%s" % (repository["name"], commit["sha"]),
+        "link":commit["html_url"],
         "message":commit["commit"]["message"]
       })
       if commit["commit"]["committer"]["date"] > new_since:
