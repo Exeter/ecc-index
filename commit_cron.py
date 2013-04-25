@@ -45,10 +45,12 @@ def main():
   for repository in projects:
     commit_list = []
     request = http.client.HTTPSConnection("api.github.com");
-    request.request("GET",("/repos/Exeter/%s/commits" % repository["name"]) + 
+    request.putrequest("GET",("/repos/Exeter/%s/commits" % repository["name"]) + 
                     "?client_id=a951833eb1496c8c32ef" +
                     "&client_secret=f338d8a20721decdae676e58c69a127aafdadafc"+
                     ("&since=%s" % since));
+    request.putheader("User-Agent", "Exeter Computing Club Server")
+    request.endheaders()
     loaded = simplejson.loads(request.getresponse().read());
     for commit in loaded:
       commit_list.append({
