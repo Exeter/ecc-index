@@ -45,17 +45,19 @@ def main():
   for repository in projects:
     commit_list = []
     request = http.client.HTTPSConnection("api.github.com");
-    request.request("GET",("/repos/Exeter/%s/commits" % repository["name"]) + 
+    request.putrequest("GET",("/repos/Exeter/%s/commits" % repository["name"]) + 
                     "?client_id=a951833eb1496c8c32ef" +
                     "&client_secret=f338d8a20721decdae676e58c69a127aafdadafc"+
                     ("&since=%s" % since));
+    request.putheader("User-Agent", "Exeter Computing Club Server")
+    request.endheaders()
     loaded = simplejson.loads(request.getresponse().read());
     for commit in loaded:
       commit_list.append({
-        "committer":commit["author"]["login"],
-        "user_link":"https://github.com/%s" % commit["author"]["login"],
+        "committer":(commit["author"]["login"] if (commit["author"]) else commit["commit"]["author"]["name"]),
+        "user_link":(commit["author"]["html_url"] if (commit["author"]) else "mailto:%s" % commit["commit"]["author"]["email"]),
         "timestamp":commit["commit"]["author"]["date"],
-        "link":"https://github.com/Exeter/%s/commit/%s" % (repository["name"], commit["sha"]),
+        "link":commit["html_url"],
         "message":commit["commit"]["message"]
       })
       if commit["commit"]["committer"]["date"] > new_since:
