@@ -8,8 +8,6 @@
 #include <algorithm>
 using namespace std;
 
-fstream DEBUG;
-
 string findmime(string ext) {
   FILE* mimetypes;
   mimetypes = fopen("mime.types", "r");
@@ -209,7 +207,6 @@ int run_manifest(char* file) {
         ++i;
       }
       new_file = format(backref, filename);
-      DEBUG << "In [" << strict_file << "] " << path << " matched " << match << ". Redirecting you to " << new_file << endl;
     }
     else {
       continue;
@@ -230,8 +227,5 @@ int run_manifest(char* file) {
 }
 
 int main() {
-  DEBUG.open("manifester.debug", fstream::out | fstream::app);
-  DEBUG << endl
-        << "REQUEST FOR: " << getenv("PATH_INFO") << endl;
   run_manifest("test.txt");
 }
