@@ -10,3 +10,6 @@ A repository containing the source code necessary to run the ECC server landing 
  - a database called news.db exists in /cgi-bin/index/, and is initialized with a table containing (rowid INTEGER PRIMARY KEY ASC, timestamp INTEGER, title TEXT, body TEXT) called news (this will be in a runnable script soon; for now just do it manually)
 
 Additionally, you must run commit_cron.py and project_cron.py at least daily.
+
+###TODO:
+ - Add collapsible news entries
