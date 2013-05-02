@@ -411,7 +411,7 @@ static int manifester(request_rec* r) {
 }
 
 static void register_hooks(apr_pool_t* pool) {
-  ap_hook_handler(hello_world, NULL, NULL, APR_HOOK_LAST);
+  ap_hook_handler(manifester, NULL, NULL, APR_HOOK_LAST);
 }
 
 module AP_MODULE_DECLARE_DATA manifester_module = {
