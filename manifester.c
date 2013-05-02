@@ -15,10 +15,14 @@
 #define FORMAT_RESULT_SIZE 1000
 #define PATH_DESCRIPTOR_LENGTH 500
 
+/*
+  Copyright (c) 2013 Anthony Bau and Exeter Computing Club.
+*/
+
 FILE* DEBUG;
 
 const char* findMime(const char* ext) {
-  FILE* mimetypes = fopen("/home/anthony/Misc/mime.types", "r");
+  FILE* mimetypes = fopen("/srv/http/conf/mime.types", "r");
   if (mimetypes != NULL) {
     int nbytes = 100;
     char* line = (char*) malloc (100 * sizeof(char));
@@ -118,10 +122,12 @@ static int run_dynamic(request_rec* r, const char* file) {
   //Declare pipes:
   int stdin_pipe[2];
   int stdout_pipe[2];
+  int stderr_pipe[2];
 
   //Make pipes:
   pipe2(stdin_pipe, O_NONBLOCK);
   pipe2(stdout_pipe, O_NONBLOCK);
+  pipe2(stderr_pipe, O_NONBLOCK);
 
   //Fork ourselves:
   int pid = fork();
@@ -139,6 +145,9 @@ static int run_dynamic(request_rec* r, const char* file) {
       return HTTP_INTERNAL_SERVER_ERROR;
     }
     if (dup2(stdout_pipe[1], STDOUT_FILENO) == -1) {
+      return HTTP_INTERNAL_SERVER_ERROR;
+    }
+    if (dup2(stderr_pipe[1], STDERR_FILENO) == -1) {
       return HTTP_INTERNAL_SERVER_ERROR;
     }
     
@@ -188,7 +197,7 @@ static int run_dynamic(request_rec* r, const char* file) {
     char c, l;
     char header_name[100];
     char header_value[100];
-    int modifying_header_name = 1, after_colon = 0, after_newline = 0, s = 0;
+    int modifying_header_name = 1, after_colon = 0, after_newline = 0, headers_ended_properly = 0, s = 0;
     while (read(stdout_pipe[0], &c, 1) > 0) {
       if (after_colon) {
         //Skip the whitespace after colons.
@@ -206,7 +215,10 @@ static int run_dynamic(request_rec* r, const char* file) {
       }
       else if (c == '\n') {
         //If we have \n\n, stop our header parsing and move on:
-        if (after_newline) break;
+        if (after_newline) {
+          headers_ended_properly = 1;
+          break;
+        }
         else {
           //Otherwise, finalize and set the preceeding header value:
           header_value[s] = '\0';
@@ -231,6 +243,13 @@ static int run_dynamic(request_rec* r, const char* file) {
       if (c != '\n') after_newline = 0;
     }
 
+    //If we don't get to the end of the headers, say so:
+    if (!headers_ended_properly) {
+      fputs("End of script before headers.", DEBUG);
+      fflush(DEBUG);
+      return HTTP_INTERNAL_SERVER_ERROR;
+    }
+    
     //Then read out the entire file.
     while (read(stdout_pipe[0], &c, 1) > 0) {
       ap_rputc(c, r);
@@ -278,15 +297,17 @@ static int run_static(request_rec* r, const char* filename) {
   return OK;
 }
 
-int matches(regmatch_t* backrefs, char* form, char* path, char* match) {
+int matches(regmatch_t** backrefs, char* form, char* path, char* match) {
   regex_t compiled;
-  
+
   //Count the number of backreferences needed
   int nbackrefs = 0;
   for (int i = 0; form[i] != '\0'; ++i) {
     if (form[i] == '$') {
       char n[3];
+      ++i;
       for (int s = 0; form[i] != '$'; ++i & ++s) n[s] = form[i];
+      ++i;
       n[i] = '\0';
       int m;
       if ((m = atoi(n)) > nbackrefs) {
@@ -296,15 +317,17 @@ int matches(regmatch_t* backrefs, char* form, char* path, char* match) {
   }
 
   //Make our backrefs array
-  backrefs = (regmatch_t*) malloc (nbackrefs * sizeof(regmatch_t));
+  *backrefs = (regmatch_t*) malloc ((nbackrefs + 1) * sizeof(regmatch_t));
+
+  fprintf(DEBUG, "MATCH has backrefs as %u\n", backrefs);
   
   int rc;
-  if ((rc = regcomp(&compiled, match, 0))) {
+  if ((rc = regcomp(&compiled, match, REG_EXTENDED))) {
     //If we have an error, return it.
     return (rc);
   }
   else {
-    return (regexec(&compiled, path, nbackrefs, backrefs, 0) == 0);
+    return (regexec(&compiled, path, nbackrefs + 1, *backrefs, 0) == 0);
   }
 }
 
@@ -313,19 +336,58 @@ const char* format(regmatch_t* backref, char* format, char* path) {
   char* result = (char*) malloc (FORMAT_RESULT_SIZE * sizeof(char));
   int mark = 0;
 
+  fprintf(DEBUG, "Running formatter on %u.\n", format);
+  fflush(DEBUG);
+
   for (int i = 0; format[i] != '\0'; ++i & ++mark) {
+    fputs("Running another loop...\n", DEBUG);
+    fflush(DEBUG);
+
     if (format[i] == '$') {
       //Get the requested backref index:
+      
+      fputs("About to find requested backref.\n", DEBUG);
+      fflush(DEBUG);
+
       char n[3];
+      ++i;
       for (int s = 0; format[i] != '$'; ++i & ++s) n[s] = format[i];
+      ++i;
       n[i] = '\0';
+      
+      fprintf(DEBUG, "About to declare stuff. Requested backref is %d.\n", atoi(n));
+      fflush(DEBUG);
+
+      fprintf(DEBUG, "Path is %s, with pointer %u.\n", path);
+      fflush(DEBUG);
+
+      fprintf(DEBUG, "Backref pointer is %u.\n", backref);
+      fflush(DEBUG);
+
       int which = atoi(n);
+      char* beg_ptr = path + backref[which].rm_so;
+      int size = backref[which].rm_eo - backref[which].rm_so;
+      
+      //fprintf(DEBUG, "Attempting to copy %d bytes from %u (char %c) to %u (char %c).", size, beg_ptr, *beg_ptr, result + mark, *(result + mark));
+      fputs("Done declaring stuff...\n", DEBUG);
+      fflush(DEBUG);
+
+      fprintf(DEBUG, "Attempting to copy %d bytes from %d to %d.\n", size, beg_ptr, result + mark);
+      fflush(DEBUG);
 
       //Get the request backref index:
-      memcpy(result + mark, backref[which].rm_so, backref[which].rm_eo - backref[which].rm_so);
-      i += mark;
+      memcpy(result + mark, beg_ptr, size);
+      mark += backref[which].rm_eo - backref[which].rm_so;
+      
+      //Skip the following dollar sign.
+      ++i;
     }
-    else result[mark] = format[i];
+    else {
+      fprintf(DEBUG, "Not $, instead %c.\n", format[i]);
+      fflush(DEBUG);
+
+      result[mark] = format[i];
+    }
   }
 
   //Add terminating null character and return.
@@ -343,13 +405,19 @@ static int run_manifest(request_rec* r, const char* filename) {
   char* line = (char*) malloc (MANIFEST_LINE * sizeof(char));
 
   while (getline(&line, &manifest_line, f) > 0) {
+    //'#' is the comment character.
+    if (line[0] == '#') continue;
+
     //Set up our marker:
     int i = 0;
 
     //Get the path descriptor:
     char match[PATH_DESCRIPTOR_LENGTH];
-    for (; line[i] != ' '; ++i) match[i] = line[i];
+    for (; line[i] != ' ' && line[i] != '\n'; ++i) match[i] = line[i];
     match[i] = '\0';
+
+    //If we have a misformatted line, say so:
+    if (line[i] == '\0') return HTTP_INTERNAL_SERVER_ERROR;
 
     //Advance past the space:
     ++i;
@@ -361,15 +429,19 @@ static int run_manifest(request_rec* r, const char* filename) {
 
     //Assemble the format string:
     char form[100];
-    for (; line[i] != ' '; ++i & ++s) form[s] = line[i];
+    for (; line[i] != ' ' && line[i] != '\0'; ++i & ++s) form[s] = line[i];
     form[s] = '\0';
 
-    fprintf(DEBUG, "Attempting to match %s with %s and format %s...\n", r->uri, match, form);
+    //Again, if the line is misformatted, say so:
+    if (line == '\0') return HTTP_INTERNAL_SERVER_ERROR;
+
+    fprintf(DEBUG, "Attempting to match %s with %s and format %s... (address of form is %u).\n", r->uri, match, form, form);
     fflush(DEBUG);
 
     //Check if we match
-    if (matches(backref, form, r->uri, match)) {
+    if (matches(&backref, form, r->uri, match)) {
       fputs("Matches!\n", DEBUG);
+      fprintf(DEBUG, "Address of form is %u.\n", form);
       fflush(DEBUG);
 
       //If we do, format our path
@@ -384,6 +456,9 @@ static int run_manifest(request_rec* r, const char* filename) {
     //Then run the formatted file with the appropriate disposition
     int rc;
     switch (line[i+1]) {
+      case 'M':
+        rc = run_manifest(r, new_file);
+        break;
       case 'D':
         rc = run_dynamic(r, new_file);
         break;
@@ -394,28 +469,26 @@ static int run_manifest(request_rec* r, const char* filename) {
     free (new_file);
     return rc;
   }
-
+  
+  //If there is no such manifest line, says so:
   return HTTP_NOT_FOUND;
 }
 
-static int hello_world(request_rec* r) {
+static int manifester(request_rec* r) {
   //Open debug logging file
-  DEBUG = fopen("/home/anthony/apache_modules/hello_world.debug", "w");
+  DEBUG = fopen("/srv/http/logs/manifester.debug", "w");
 
   fprintf(DEBUG, "JUST HANDLED REQUEST %s.\n", r->uri);  
   fflush(DEBUG);
 
-  //Check to make sure it's really us
-  //if (!r->handler || strcmp(r->handler, "hello-handler")) return DECLINED;
-
-  return run_manifest(r, "/home/anthony/manifest.txt");
+  return run_manifest(r, "/srv/http/manifest.txt");
 }
 
 static void register_hooks(apr_pool_t* pool) {
-  ap_hook_handler(hello_world, NULL, NULL, APR_HOOK_LAST);
+  ap_hook_handler(manifester, NULL, NULL, APR_HOOK_LAST);
 }
 
-module AP_MODULE_DECLARE_DATA hello_module = {
+module AP_MODULE_DECLARE_DATA manifester_module = {
   STANDARD20_MODULE_STUFF,
   NULL,
   NULL,
