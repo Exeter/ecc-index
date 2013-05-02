@@ -398,16 +398,15 @@ static int run_manifest(request_rec* r, const char* filename) {
   return HTTP_NOT_FOUND;
 }
 
-static int hello_world(request_rec* r) {
+static int manifester(request_rec* r) {
   //Open debug logging file
-  DEBUG = fopen("/home/anthony/apache_modules/hello_world.debug", "w");
+  //TODO make part of Apache configuration.
+  DEBUG = fopen("/srv/http/logs/manifester.debug", "w");
 
   fprintf(DEBUG, "JUST HANDLED REQUEST %s.\n", r->uri);  
   fflush(DEBUG);
 
-  //Check to make sure it's really us
-  //if (!r->handler || strcmp(r->handler, "hello-handler")) return DECLINED;
-
+  //TODO specify manifest location in Apache configuration.
   return run_manifest(r, "/home/anthony/manifest.txt");
 }
 
@@ -415,7 +414,7 @@ static void register_hooks(apr_pool_t* pool) {
   ap_hook_handler(hello_world, NULL, NULL, APR_HOOK_LAST);
 }
 
-module AP_MODULE_DECLARE_DATA hello_module = {
+module AP_MODULE_DECLARE_DATA manifester_module = {
   STANDARD20_MODULE_STUFF,
   NULL,
   NULL,

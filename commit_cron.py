@@ -43,6 +43,7 @@ def main():
   final = {}
 
   for repository in projects:
+    print (repository)
     commit_list = []
     request = http.client.HTTPSConnection("api.github.com");
     request.putrequest("GET",("/repos/Exeter/%s/commits" % repository["name"]) + 
