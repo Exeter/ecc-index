@@ -176,6 +176,17 @@
               var news_wrapper = $(document.createElement("div")).addClass("news"),
                   news_header = $(document.createElement("div")).addClass("news_header").text(data.posts[i].title),
                   news_body = $(document.createElement("div")).addClass("news_body").html(data.posts[i].body);
+              news_header.click(function() {
+                if (new_body.css("display") === "none") {
+                  new_body.css("display", "block");
+                  new_body.animate({"height":"auto"}, 400);
+                }
+                else {
+                  new_body.animate({"height":0}, 400, "swing", function() {
+                    new_body.css("display", "none");
+                  });
+                }
+              });
               feed_body.append(news_wrapper.append(news_header).append(news_body));
             }
             since = data.last;
