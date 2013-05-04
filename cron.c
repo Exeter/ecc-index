@@ -37,6 +37,7 @@ int run_cron(const char* file) {
         //If it is, run its cron jobs as well:
         char new_file[after_path - before_path];
         memcpy(new_file, before_path, after_path - before_path);
+        run_cron(new_file);
       }
     }
     else {
