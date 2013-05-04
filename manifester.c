@@ -292,7 +292,11 @@ static int run_static(request_rec* r, const char* filename) {
   size_t length = fread(contents, 1, size, file);
   contents[length] = 0;
 
-  ap_rputs(contents, r);
+  //NOTE not working for binary files:
+  //ap_rputs(contents, r);
+
+  //TODO try not to iterate over the entire thing...
+  for (int i = 0; i < length; ++i) ap_rputc(contents[i], r);
   free(contents);
   return OK;
 }
