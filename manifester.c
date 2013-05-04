@@ -408,6 +408,9 @@ static int run_manifest(request_rec* r, const char* filename) {
     //'#' is the comment character.
     if (line[0] == '#') continue;
 
+    //'--CRON--' is the marker for the start of cron jobs:
+    if (strcmp(line, "--CRON--\n") == 0) break;
+
     //Set up our marker:
     int i = 0;
 
