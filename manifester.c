@@ -10,16 +10,181 @@
 #include "http_protocol.h"
 #include "http_request.h"
 
+//Nothing will be logged in the DEBUG file if this is undefined:
+#define MANIFEST_DEBUG_MODE
+
+//There shall be no Log of Damnation if you remove this definition:
+#define DAMN_ABUSERS
+
 #define BLOCK_SIZE 100
 #define MANIFEST_LINE 1000
 #define FORMAT_RESULT_SIZE 1000
 #define PATH_DESCRIPTOR_LENGTH 500
+#define BLACKLIST_THRESHOLD 50
+#define BLACKLIST_CLEAR_FREQENCY 3600
+#define DEFAULT_DOS_BUCKET_SIZE 30
 
 /*
   Copyright (c) 2013 Anthony Bau and Exeter Computing Club.
 */
 
+//Debugging file:
 FILE* DEBUG;
+
+//Access log:
+FILE* ACCESS_LOG;
+
+//Error log:
+FILE* ERROR_LOG;
+
+/*
+  THE LOG OF DAMNATNION
+    Those who make this log shall forever be condemned to an afterlife of wandering this barren earth, lusting after the contentment and fulfillment that once could have been theirs, thin wisps in the air, insubstantial as they gaze listlessly at the happy faces on this gray planet, their minds gutted and filled with glop, never resting but floating horribly about the burning ether.
+
+    Basically for IP addresses who try to abuse our HTTP server.
+*/
+FILE* LOG_OF_DAMNATION;
+
+//A simple hashmap implementation, since I could not find a good one elsewhere.
+struct hashmap_node;
+
+typedef struct hashmap_node hashmap_node;
+
+struct hashmap_node {
+  char* key;
+  int value;
+  hashmap_node* next;
+};
+
+int hash(char* string) {
+  int r = 0;
+  for (int i = 0; string[i] != '\0'; ++i) r = r * 31 + string[i];
+  return r;
+}
+
+typedef struct {
+  hashmap_node** buckets;
+  int size;
+  time_t last_cleared;
+} hashmap;
+
+static int hashmap_get(hashmap map, char* key) {
+  hashmap_node* head = map.buckets[hash(key) % map.size];
+  while (head != NULL && strcmp(head->key, key)) head = head->next;
+  if (head == NULL) return -1;
+  else return head->value;
+}
+
+static void hashmap_clear(hashmap* map) {
+#ifdef MANIFEST_DEBUG_MODE
+  fputs("Clearing a map.\n", DEBUG);
+  fflush(DEBUG);
+#endif
+
+  int size = map->size;
+  for (int i = 0; i < size; ++i) {
+    hashmap_node* head = map->buckets[i];
+    if (head == NULL) continue;
+    else {
+      //Free every element here:
+      hashmap_node* foot = head->next;
+      while (foot != NULL) {
+        free(head->key);
+        free(head);
+        head = foot;
+        foot = head->next;
+      }
+    }
+  }
+}
+
+static hashmap * request_densities;
+
+static int hashmap_increment(hashmap* map, char* key) {
+  //If it's time to refresh, do so and automatically clear this requester:
+  if (difftime(time(NULL), map->last_cleared) > 3600) {
+    hashmap_clear(map);
+    return 0;
+  }
+
+  int incorrect = 0, index;
+  hashmap_node* head = map->buckets[(index = hash(key) % map->size)];
+
+  //If there is nothing in this bucket yet, put something there:
+  if (head == 0) {
+    //Make a new element:
+    hashmap_node* new_element = (hashmap_node*) malloc (sizeof(hashmap_node));
+    
+    //Fill the new element in with the correct values:
+    char* cpkey = (char*) malloc ((strlen(key) + 1) * sizeof(char));
+    memcpy(cpkey, key, strlen(key) + 1);
+    new_element->key = cpkey;
+    new_element->value = 1;
+    new_element->next = NULL;
+    
+    //Install the new element:
+    map->buckets[index] = new_element;
+
+#ifdef MANIFEST_DEBUG_MODE
+    fprintf(DEBUG, "This is %s's first request this clear period. Storing him at index %d.\n", key, index);
+    fflush(DEBUG);
+#endif
+
+    return 0;
+  }
+
+  //Otherwise, search the list at that bucket:
+  while (head->next != NULL & (incorrect = strcmp(head->key, key))) {
+    head = head->next;
+  }
+
+  if (incorrect) {
+    //We have reached the end of the list and found no fit:
+    head->next = (hashmap_node*) malloc (sizeof(hashmap_node));
+    
+    //Make a new element with the correct values:
+    char* cpkey = (char*) malloc ((strlen(key) + 1) * sizeof(char));
+    memcpy(cpkey, key, strlen(key) + 1);
+    head->next->key = cpkey;
+    head->next->value = 1;
+    head->next->next = NULL;
+
+#ifdef MANIFEST_DEBUG_MODE
+    fprintf(DEBUG, "This is %s's first request this clear period.\n", key);
+#endif
+
+    return 0;
+  }
+  else {
+    //Otherwise, this element already exists, so we can increment it.
+    head->value += 1;
+
+#ifdef MANIFEST_DEBUG_MODE
+    fprintf(DEBUG, "%s has requested %d times this period.\n", key, head->value);
+#endif
+
+    //If this IP has topped the blacklist threshold, blacklist them:
+    if (head->value >= BLACKLIST_THRESHOLD) {
+#ifdef MANIFEST_DEBUG_MODE
+      fputs("THIS REQUESTER IS BLACKLISTED.\n", DEBUG);
+      fflush(DEBUG);
+#endif
+
+#ifdef DAMN_ABUSERS
+      //Log this requester as pretty bad.
+      if (head->value == BLACKLIST_THRESHOLD) {
+        fprintf(LOG_OF_DAMNATION, "%s\n", key);
+        fflush(LOG_OF_DAMNATION);
+      }
+#endif
+
+      return 1;
+    }
+  }
+
+  //If we've gotten here, the requester is benign.
+  return 0;
+}
 
 const char* findMime(const char* ext) {
   FILE* mimetypes = fopen("/srv/http/conf/mime.types", "r");
@@ -115,9 +280,10 @@ static int util_read (request_rec* r, const char** rbuf, apr_off_t* size) {
 }
 
 static int run_dynamic(request_rec* r, const char* file) {
-  
-  fprintf(DEBUG, "Running file %s.", file);
+#ifdef MANIFEST_DEBUG_MODE 
+  fprintf(DEBUG, "Running file %s.\n", file);
   fflush(DEBUG);
+#endif
 
   //Declare pipes:
   int stdin_pipe[2];
@@ -245,8 +411,10 @@ static int run_dynamic(request_rec* r, const char* file) {
 
     //If we don't get to the end of the headers, say so:
     if (!headers_ended_properly) {
+#ifdef MANIFEST_DEBUG_MODE
       fputs("End of script before headers.", DEBUG);
       fflush(DEBUG);
+#endif
       return HTTP_INTERNAL_SERVER_ERROR;
     }
     
@@ -260,9 +428,10 @@ static int run_dynamic(request_rec* r, const char* file) {
 }
 
 static int run_static(request_rec* r, const char* filename) {
+#ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "Running static file %s.\n", filename);
   fflush(DEBUG);
-
+#endif
   int size;
   FILE* file = fopen(filename, "rb");
 
@@ -273,8 +442,10 @@ static int run_static(request_rec* r, const char* filename) {
   size = ftell(file);
   fseek(file, 0L, SEEK_SET);
 
+#ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "Got length of file: %d.\n", size);
   fflush(DEBUG);
+#endif
 
   char extension[20];
   char* dot_ptr = strrchr(filename, '.') + 1;
@@ -282,8 +453,10 @@ static int run_static(request_rec* r, const char* filename) {
   memcpy(extension, dot_ptr, ext_len);
   extension[ext_len] = 0;
 
+#ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "File extension is %s. Thus mimeType is %s.", extension, findMime(extension));
   fflush(DEBUG);
+#endif
 
   ap_set_content_type(r, findMime(extension));
 
@@ -322,8 +495,6 @@ int matches(regmatch_t** backrefs, char* form, char* path, char* match) {
 
   //Make our backrefs array
   *backrefs = (regmatch_t*) malloc ((nbackrefs + 1) * sizeof(regmatch_t));
-
-  fprintf(DEBUG, "MATCH has backrefs as %u\n", backrefs);
   
   int rc;
   if ((rc = regcomp(&compiled, match, REG_EXTENDED))) {
@@ -340,45 +511,20 @@ const char* format(regmatch_t* backref, char* format, char* path) {
   char* result = (char*) malloc (FORMAT_RESULT_SIZE * sizeof(char));
   int mark = 0;
 
-  fprintf(DEBUG, "Running formatter on %u.\n", format);
-  fflush(DEBUG);
-
   for (int i = 0; format[i] != '\0'; ++i & ++mark) {
-    fputs("Running another loop...\n", DEBUG);
-    fflush(DEBUG);
-
     if (format[i] == '$') {
       //Get the requested backref index:
       
-      fputs("About to find requested backref.\n", DEBUG);
-      fflush(DEBUG);
-
       char n[3];
       ++i;
       for (int s = 0; format[i] != '$'; ++i & ++s) n[s] = format[i];
       ++i;
       n[i] = '\0';
-      
-      fprintf(DEBUG, "About to declare stuff. Requested backref is %d.\n", atoi(n));
-      fflush(DEBUG);
-
-      fprintf(DEBUG, "Path is %s, with pointer %u.\n", path);
-      fflush(DEBUG);
-
-      fprintf(DEBUG, "Backref pointer is %u.\n", backref);
-      fflush(DEBUG);
 
       int which = atoi(n);
       char* beg_ptr = path + backref[which].rm_so;
       int size = backref[which].rm_eo - backref[which].rm_so;
       
-      //fprintf(DEBUG, "Attempting to copy %d bytes from %u (char %c) to %u (char %c).", size, beg_ptr, *beg_ptr, result + mark, *(result + mark));
-      fputs("Done declaring stuff...\n", DEBUG);
-      fflush(DEBUG);
-
-      fprintf(DEBUG, "Attempting to copy %d bytes from %d to %d.\n", size, beg_ptr, result + mark);
-      fflush(DEBUG);
-
       //Get the request backref index:
       memcpy(result + mark, beg_ptr, size);
       mark += backref[which].rm_eo - backref[which].rm_so;
@@ -387,9 +533,6 @@ const char* format(regmatch_t* backref, char* format, char* path) {
       ++i;
     }
     else {
-      fprintf(DEBUG, "Not $, instead %c.\n", format[i]);
-      fflush(DEBUG);
-
       result[mark] = format[i];
     }
   }
@@ -400,8 +543,10 @@ const char* format(regmatch_t* backref, char* format, char* path) {
 }
 
 static int run_manifest(request_rec* r, const char* filename) {
+#ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "Running manifest file %s.\n", filename);
   fflush(DEBUG);
+#endif
   
   FILE* f = fopen(filename, "r");
   char* path = r->uri;
@@ -442,15 +587,8 @@ static int run_manifest(request_rec* r, const char* filename) {
     //Again, if the line is misformatted, say so:
     if (line == '\0') return HTTP_INTERNAL_SERVER_ERROR;
 
-    fprintf(DEBUG, "Attempting to match %s with %s and format %s... (address of form is %u).\n", r->uri, match, form, form);
-    fflush(DEBUG);
-
     //Check if we match
     if (matches(&backref, form, r->uri, match)) {
-      fputs("Matches!\n", DEBUG);
-      fprintf(DEBUG, "Address of form is %u.\n", form);
-      fflush(DEBUG);
-
       //If we do, format our path
       new_file = (const char*) format(backref, form, r->uri);
       free(backref);
@@ -474,6 +612,7 @@ static int run_manifest(request_rec* r, const char* filename) {
         break;
     }
     free (new_file);
+
     return rc;
   }
   
@@ -481,17 +620,36 @@ static int run_manifest(request_rec* r, const char* filename) {
   return HTTP_NOT_FOUND;
 }
 
-static int manifester(request_rec* r) {
-  //Open debug logging file
-  DEBUG = fopen("/srv/http/logs/manifester.debug", "w");
+static void* setup_req_densities(apr_pool_t *p, server_rec *s) {
+  //Create the request density table:
+  request_densities = (hashmap *) malloc (sizeof(hashmap));
+  request_densities->buckets = (hashmap_node **) calloc (DEFAULT_DOS_BUCKET_SIZE, sizeof(hashmap));
+  request_densities->size = DEFAULT_DOS_BUCKET_SIZE;
+  request_densities->last_cleared = time(NULL);
+}
 
-  fprintf(DEBUG, "JUST HANDLED REQUEST %s.\n", r->uri);  
+static int manifester(request_rec* r) {
+#ifdef MANIFEST_DEBUG_MODE
+  fprintf(DEBUG, "\nPID %d (name %s) handled request %s from %s.\n", getpid(), r->server->process->argv[0], r->uri, r->connection->client_ip);
   fflush(DEBUG);
+#endif
+
+  //Deny service to service deniers:
+  if (hashmap_increment(request_densities, r->connection->client_ip)) {
+    return HTTP_FORBIDDEN;
+  }
 
   return run_manifest(r, "/srv/http/manifest.txt");
 }
 
 static void register_hooks(apr_pool_t* pool) {
+#ifdef MANIFEST_DEBUG_MODE
+  DEBUG = fopen("/srv/http/logs/manifester.debug", "w");
+#endif
+
+#ifdef DAMN_ABUSERS
+  LOG_OF_DAMNATION = fopen("/srv/http/logs/damnation.log", "w");
+#endif
   ap_hook_handler(manifester, NULL, NULL, APR_HOOK_LAST);
 }
 
@@ -499,7 +657,7 @@ module AP_MODULE_DECLARE_DATA manifester_module = {
   STANDARD20_MODULE_STUFF,
   NULL,
   NULL,
-  NULL,
+  setup_req_densities,
   NULL,
   NULL,
   register_hooks
