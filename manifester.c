@@ -21,7 +21,7 @@
 #define FORMAT_RESULT_SIZE 1000
 #define PATH_DESCRIPTOR_LENGTH 500
 #define BLACKLIST_THRESHOLD 50
-#define BLACKLIST_CLEAR_FREQENCY 3600
+#define BLACKLIST_CLEAR_FREQUENCY 300
 #define DEFAULT_DOS_BUCKET_SIZE 30
 
 /*
@@ -102,7 +102,7 @@ static hashmap * request_densities;
 
 static int hashmap_increment(hashmap* map, char* key) {
   //If it's time to refresh, do so and automatically clear this requester:
-  if (difftime(time(NULL), map->last_cleared) > 3600) {
+  if (difftime(time(NULL), map->last_cleared) > BLACKLIST_CLEAR_FREQUENCY) {
     hashmap_clear(map);
     return 0;
   }
@@ -280,7 +280,7 @@ static int util_read (request_rec* r, const char** rbuf, apr_off_t* size) {
 }
 
 static int run_dynamic(request_rec* r, const char* file) {
-#ifdef MANIFEST_DEBUG_MODE 
+#ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "Running file %s.\n", file);
   fflush(DEBUG);
 #endif
@@ -432,21 +432,9 @@ static int run_static(request_rec* r, const char* filename) {
   fprintf(DEBUG, "Running static file %s.\n", filename);
   fflush(DEBUG);
 #endif
-  int size;
-  FILE* file = fopen(filename, "rb");
-
-  if (file == NULL) return HTTP_NOT_FOUND;
   
-  //Get the size of the file:
-  fseek(file, 0L, SEEK_END);
-  size = ftell(file);
-  fseek(file, 0L, SEEK_SET);
 
-#ifdef MANIFEST_DEBUG_MODE
-  fprintf(DEBUG, "Got length of file: %d.\n", size);
-  fflush(DEBUG);
-#endif
-
+  //Find the extension:
   char extension[20];
   char* dot_ptr = strrchr(filename, '.') + 1;
   int ext_len = filename + strlen(filename) - dot_ptr;
@@ -454,23 +442,54 @@ static int run_static(request_rec* r, const char* filename) {
   extension[ext_len] = 0;
 
 #ifdef MANIFEST_DEBUG_MODE
-  fprintf(DEBUG, "File extension is %s. Thus mimeType is %s.", extension, findMime(extension));
+  fprintf(DEBUG, "File extension is %s. Thus mimeType is %s.\n", extension, findMime(extension));
   fflush(DEBUG);
 #endif
 
+  //Set the mimetype to the proper value for this extension:
   ap_set_content_type(r, findMime(extension));
+  
+/*
+  TODO Get this gorram thing working.
+//Open the file and send it:
+  apr_file_t* file = 0;
+  int* sent;
+  char buf[30];
+  int result = 0;
+  result = apr_file_open(&file, filename, APR_READ | APR_BINARY, APR_OS_DEFAULT, r->pool);
 
-  //Read out the file:
-  char* contents = (char*) malloc(size + 1);
-  size_t length = fread(contents, 1, size, file);
-  contents[length] = 0;
+#ifdef MANIFEST_DEBUG_MODE
+  fprintf(DEBUG, "apr_file_open came back with result code %s (%s).\n", apr_strerror(result, buf, 30), buf, file);
+  fflush(DEBUG);
+#endif
 
-  //NOTE not working for binary files:
-  //ap_rputs(contents, r);
+  TODO Get this gorram thing working.
 
-  //TODO try not to iterate over the entire thing...
-  for (int i = 0; i < length; ++i) ap_rputc(contents[i], r);
-  free(contents);
+  apr_finfo_t file_info;
+  result = apr_file_info_get(&file_info, APR_FINFO_SIZE, file);
+
+#ifdef MANIFEST_DEBUG_MODE
+  fprintf(DEBUG, "apr_file_info_get came back with result code %s (%s) (file size looks like %d; rfinfo says %d).\n", apr_strerror(result, buf, 30), buf, file_info.size, r->finfo.size);
+  fflush(DEBUG);
+#endif
+
+  ap_set_content_length(r, file_info.size);
+  ap_send_fd(file, r, 0, r->finfo.size, (apr_size_t*) sent);
+*/
+  FILE* file = fopen(filename, "rb");
+  
+  //Get file length
+  fseek(file, 0L, SEEK_END);
+  int size = ftell(file);
+  rewind(file);
+  
+  char* buffer = (char*) malloc (size * sizeof(char));
+  fread(buffer, size, 1, file);
+
+  ap_rwrite(buffer, size, r);
+  
+  free(buffer);
+
   return OK;
 }
 
