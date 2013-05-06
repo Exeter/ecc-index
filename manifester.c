@@ -45,15 +45,18 @@ FILE* ERROR_LOG;
 */
 FILE* LOG_OF_DAMNATION;
 
-//A simple hashmap implementation, since I could not find a good one elsewhere.
-struct hashmap_node;
+/*========================
+ * HIT LIST FUNCTIONS for caching and DOS evasion
+ *========================*/
 
-typedef struct hashmap_node hashmap_node;
+struct hit_list_node;
 
-struct hashmap_node {
+typedef struct hit_list_node hit_list_node;
+
+struct hit_list_node {
   char* key;
   int value;
-  hashmap_node* next;
+  hit_list_node* next;
 };
 
 int hash(char* string) {
@@ -63,19 +66,12 @@ int hash(char* string) {
 }
 
 typedef struct {
-  hashmap_node** buckets;
+  hit_list_node** buckets;
   int size;
   time_t last_cleared;
-} hashmap;
+} hit_list;
 
-static int hashmap_get(hashmap map, char* key) {
-  hashmap_node* head = map.buckets[hash(key) % map.size];
-  while (head != NULL && strcmp(head->key, key)) head = head->next;
-  if (head == NULL) return -1;
-  else return head->value;
-}
-
-static void hashmap_clear(hashmap* map) {
+static void hit_list_clear(hit_list* map) {
 #ifdef MANIFEST_DEBUG_MODE
   fputs("Clearing a map.\n", DEBUG);
   fflush(DEBUG);
@@ -83,11 +79,11 @@ static void hashmap_clear(hashmap* map) {
 
   int size = map->size;
   for (int i = 0; i < size; ++i) {
-    hashmap_node* head = map->buckets[i];
+    hit_list_node* head = map->buckets[i];
     if (head == NULL) continue;
     else {
       //Free every element here:
-      hashmap_node* foot = head->next;
+      hit_list_node* foot = head->next;
       while (foot != NULL) {
         free(head->key);
         free(head);
@@ -98,22 +94,20 @@ static void hashmap_clear(hashmap* map) {
   }
 }
 
-static hashmap * request_densities;
-
-static int hashmap_increment(hashmap* map, char* key) {
+static int hit_list_increment(hit_list* map, char* key, int threshold, int damn_abusers) {
   //If it's time to refresh, do so and automatically clear this requester:
   if (difftime(time(NULL), map->last_cleared) > BLACKLIST_CLEAR_FREQUENCY) {
-    hashmap_clear(map);
+    hit_list_clear(map);
     return 0;
   }
 
   int incorrect = 0, index;
-  hashmap_node* head = map->buckets[(index = hash(key) % map->size)];
+  hit_list_node* head = map->buckets[(index = hash(key) % map->size)];
 
   //If there is nothing in this bucket yet, put something there:
   if (head == 0) {
     //Make a new element:
-    hashmap_node* new_element = (hashmap_node*) malloc (sizeof(hashmap_node));
+    hit_list_node* new_element = (hit_list_node*) malloc (sizeof(hit_list_node));
     
     //Fill the new element in with the correct values:
     char* cpkey = (char*) malloc ((strlen(key) + 1) * sizeof(char));
@@ -140,7 +134,7 @@ static int hashmap_increment(hashmap* map, char* key) {
 
   if (incorrect) {
     //We have reached the end of the list and found no fit:
-    head->next = (hashmap_node*) malloc (sizeof(hashmap_node));
+    head->next = (hit_list_node*) malloc (sizeof(hit_list_node));
     
     //Make a new element with the correct values:
     char* cpkey = (char*) malloc ((strlen(key) + 1) * sizeof(char));
@@ -164,15 +158,10 @@ static int hashmap_increment(hashmap* map, char* key) {
 #endif
 
     //If this IP has topped the blacklist threshold, blacklist them:
-    if (head->value >= BLACKLIST_THRESHOLD) {
-#ifdef MANIFEST_DEBUG_MODE
-      fputs("THIS REQUESTER IS BLACKLISTED.\n", DEBUG);
-      fflush(DEBUG);
-#endif
-
+    if (head->value >= threshold) {
 #ifdef DAMN_ABUSERS
       //Log this requester as pretty bad.
-      if (head->value == BLACKLIST_THRESHOLD) {
+      if (damn_abusers && head->value == BLACKLIST_THRESHOLD) {
         fprintf(LOG_OF_DAMNATION, "%s\n", key);
         fflush(LOG_OF_DAMNATION);
       }
@@ -185,6 +174,123 @@ static int hashmap_increment(hashmap* map, char* key) {
   //If we've gotten here, the requester is benign.
   return 0;
 }
+
+/*==================
+ *  HASHMAP FUNCTIONS for caching
+ *==================*/
+
+struct hashmap_node;
+
+typedef struct hashmap_node hashmap_node;
+
+struct hashmap_node {
+  char* key;
+  void* value;
+  hashmap_node* next;
+};
+
+typedef struct {
+  hashmap_node** buckets;
+  int size;
+  time_t last_cleared;
+} hashmap;
+
+static void hashmap_clear(hashmap* map) {
+#ifdef MANIFEST_DEBUG_MODE
+  fputs("Clearing a hashmap.\n", DEBUG);
+  fflush(DEBUG);
+#endif
+
+  int size = map->size;
+  for (int i = 0; i < size; ++i) {
+    hit_list_node* head = map->buckets[i];
+    if (head == NULL) continue;
+    else {
+      //Free every element here:
+      hit_list_node* foot = head->next;
+      while (foot != NULL) {
+        free(head->key);
+        free(head);
+        head = foot;
+        foot = head->next;
+      }
+    }
+  }
+}
+
+static int hashmap_contains(hashmap* map, char* key) {
+  hashmap_node* head = map->buckets[hash(key) % map->size];
+  
+}
+
+static void* hashmap_get(hashmap* map, char* key) {
+  hashmap_node* head = map->buckets[hash(key) % map->size];
+  while (head != NULL && strcmp(head->key, key)) head = head->next;
+  if (head == NULL) return -1;
+  else return head->value;
+}
+
+static void hashmap_set(hashmap* map, char* key, void* value) {
+  int index, incorrect = 1;
+  hashmap_node* head = map->buckets[(index = hash(key) % map->size)];
+  if (head != NULL) while (head->next != NULL && (incorrect = strcmp(head->key, key))) head = head->next;
+  if (incorrect) {
+    //Create and a new node.
+    int keylen = strlen(key) + 1;
+    hashmap_node* new_el = (hashmap_node*) malloc (sizeof(hashmap_node));
+    new_el->key = (char*) malloc (keylen * sizeof(char));
+    memcpy(new_el->key, key, keylen);
+    new_el->value = value;
+    new_el->next = NULL;
+
+    //Install it.
+    if (head == NULL) map->buckets[index] = new_el;
+    else head->next = new_el;
+  }
+  else {
+    //Set the value of the matching element.
+    head->value = value;
+  }
+}
+
+/*================
+ * SPECIAL CACHING TYPES
+ *================*/
+
+//Represents something to execute:
+typedef struct {
+  int disposition;
+  char* file;
+} manifest_command;
+
+//Represents a static file for reading:
+typedef struct {
+  FILE* file;
+  int size;
+} static_file_record;
+
+/*=================
+ * GLOBAL VARIABLES
+ *=================*/
+
+//A hit list for DOS evasion:
+static hit_list * request_densities;
+
+//A hit list for caching:
+static hit_list * cache_record;
+
+//A hashmap for manifest line caching:
+static hashmap * line_cache; //ALL VALUE TYPES SHOULD BE (manifest_command*)
+
+//A hashmap for file name to file pointer caching:
+static hashmap * file_ptr_cache; //ALL VALUE TYPES SHOULD BE (FILE*)
+
+//A hashmap for file name to full file string caching:
+static hashmap * file_text_cache; //ALL VALUE TYPES SHOULD BE (char*)
+
+/*=================
+ * SERVER TOOLS
+ *=================*/
 
 const char* findMime(const char* ext) {
   FILE* mimetypes = fopen("/srv/http/conf/mime.types", "r");
@@ -278,6 +384,10 @@ static int util_read (request_rec* r, const char** rbuf, apr_off_t* size) {
 
   return (rc);
 }
+
+/*===============
+ * FILE RUNNING FUNCTIONS
+ *===============*/
 
 static int run_dynamic(request_rec* r, const char* file) {
 #ifdef MANIFEST_DEBUG_MODE
@@ -450,8 +560,8 @@ static int run_static(request_rec* r, const char* filename) {
   ap_set_content_type(r, findMime(extension));
   
 /*
-  TODO Get this gorram thing working.
-//Open the file and send it:
+  //TODO Get this gorram thing working.
+  //Open the file and send it:
   apr_file_t* file = 0;
   int* sent;
   char buf[30];
@@ -463,7 +573,7 @@ static int run_static(request_rec* r, const char* filename) {
   fflush(DEBUG);
 #endif
 
-  TODO Get this gorram thing working.
+  //TODO Get this gorram thing working.
 
   apr_finfo_t file_info;
   result = apr_file_info_get(&file_info, APR_FINFO_SIZE, file);
@@ -474,7 +584,7 @@ static int run_static(request_rec* r, const char* filename) {
 #endif
 
   ap_set_content_length(r, file_info.size);
-  ap_send_fd(file, r, 0, r->finfo.size, (apr_size_t*) sent);
+  ap_send_fd(file, r, 0, 3964, (apr_size_t*) sent);
 */
   FILE* file = fopen(filename, "rb");
   
@@ -492,6 +602,10 @@ static int run_static(request_rec* r, const char* filename) {
 
   return OK;
 }
+
+/*================
+ * THE MANIFEST PARSER
+ *================*/
 
 int matches(regmatch_t** backrefs, char* form, char* path, char* match) {
   regex_t compiled;
@@ -641,11 +755,15 @@ static int run_manifest(request_rec* r, const char* filename) {
 
 static void* setup_req_densities(apr_pool_t *p, server_rec *s) {
   //Create the request density table:
-  request_densities = (hashmap *) malloc (sizeof(hashmap));
-  request_densities->buckets = (hashmap_node **) calloc (DEFAULT_DOS_BUCKET_SIZE, sizeof(hashmap));
+  request_densities = (hit_list *) malloc (sizeof(hit_list));
+  request_densities->buckets = (hit_list_node **) calloc (DEFAULT_DOS_BUCKET_SIZE, sizeof(hit_list));
   request_densities->size = DEFAULT_DOS_BUCKET_SIZE;
   request_densities->last_cleared = time(NULL);
 }
+
+/*=================
+ * APACHE REGISTRATON STUFF
+ *=================*/
 
 static int manifester(request_rec* r) {
 #ifdef MANIFEST_DEBUG_MODE
@@ -654,7 +772,7 @@ static int manifester(request_rec* r) {
 #endif
 
   //Deny service to service deniers:
-  if (hashmap_increment(request_densities, r->connection->client_ip)) {
+  if (hit_list_increment(request_densities, r->connection->client_ip, BLACKLIST_THRESHOLD, 1)) {
     return HTTP_FORBIDDEN;
   }
 
