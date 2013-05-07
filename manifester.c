@@ -20,13 +20,13 @@
 #define LINE_CACHE_CLEAR_FREQ 3600
 #define LINE_CACHE_THRESHOLD 300
 #define STATIC_FILE_CLEAR_FREQ 3600
-#define FILE_TOTAL_CACHE_THRESHOLD 1000
-#define FILE_PTR_CACHE_THRESHOLD 600
+#define FILE_TOTAL_CACHE_THRESHOLD 20
+#define FILE_PTR_CACHE_THRESHOLD 10
 #define BLOCK_SIZE 100
 #define MANIFEST_LINE 1000
 #define FORMAT_RESULT_SIZE 1000
 #define PATH_DESCRIPTOR_LENGTH 500
-#define BLACKLIST_THRESHOLD 50
+#define BLACKLIST_THRESHOLD 100
 #define BLACKLIST_CLEAR_FREQUENCY 300
 #define DEFAULT_DOS_BUCKET_SIZE 30
 
@@ -124,7 +124,7 @@ static int hit_list_increment(hit_list* map, const char* key, int clear_freq) {
     map->buckets[index] = new_element;
 
 #ifdef MANIFEST_DEBUG_MODE
-    fprintf(DEBUG, "This is %s's first request this clear period. Storing him at index %d.\n", key, index);
+    fprintf(DEBUG, "The first hit to %s this clear period. Creating a node at index %d.\n", key, index);
     fflush(DEBUG);
 #endif
 
@@ -146,14 +146,14 @@ static int hit_list_increment(hit_list* map, const char* key, int clear_freq) {
     head->next->next = NULL;
 
 #ifdef MANIFEST_DEBUG_MODE
-    fprintf(DEBUG, "This is %s's first request this clear period.\n", key);
+    fprintf(DEBUG, "This is the first hit to %s this clear period.\n", key);
 #endif
 
     return 1;
   }
   else {
 #ifdef MANIFEST_DEBUG_MODE
-    fprintf(DEBUG, "%s has requested %d times this period.\n", key, head->value);
+    fprintf(DEBUG, "%s was hit %d times this period.\n", key, head->value);
 #endif
     //Otherwise, this element already exists, so we can increment it.
     return (head->value += 1);
@@ -199,6 +199,7 @@ static void hashmap_clear(hashmap* map) {
       while (foot != NULL) {
         free(head->key);
         free(head);
+        map->buckets[i] = NULL;
         head = foot;
         foot = head->next;
       }
@@ -226,11 +227,21 @@ static void* hashmap_get(hashmap* map, const char* key) {
   fputs("Found the proper head value.\n", DEBUG);
   fflush(DEBUG);
 #endif
-if (head == NULL) return NULL;
-  else return head->value;
+  if (head == NULL) return NULL;
+  else {
+#ifdef MANIFEST_DEBUG_MODE
+    fprintf(DEBUG, "Returning the non-NULL value %u.\n", head->value);
+    fflush(DEBUG);
+#endif
+    return head->value;
+  }
 }
 
 static void hashmap_set(hashmap* map, const char* key, void* value) {
+#ifdef MANIFEST_DEBUG_MODE
+  fprintf(DEBUG, "Setting hashmap %u value %s to %u\n", map, key, value);
+  fflush(DEBUG);
+#endif
   int index, incorrect = 1;
   hashmap_node* head = map->buckets[(index = hash(key) % map->size)];
   if (head != NULL) while (head->next != NULL && (incorrect = strcmp(head->key, key))) head = head->next;
@@ -564,6 +575,8 @@ static int run_static(request_rec* r, const char* filename) {
 #ifdef MANIFEST_DEBUG_MODE
       fputs("Supercache hit!\n", DEBUG);
       fflush(DEBUG);
+      fprintf(DEBUG, "About to write\n%s\n to the client.\n", t_finfo->text);
+      fflush(DEBUG);
 #endif
       //Total file cache hit.
       ap_set_content_type(r, t_finfo->mimetype);
@@ -580,15 +593,18 @@ static int run_static(request_rec* r, const char* filename) {
       ap_set_content_type(r, finfo->mimetype);
       ap_set_content_length(r, finfo->size);
       char* buf = (char*) malloc (finfo->size * sizeof(char));
-      int bytes_read;
-      if (bytes_read = fread(buf, finfo->size, 1, finfo->file) < finfo->size) finfo->size = bytes_read;
+      int bytes_read = fread(buf, finfo->size, 1, finfo->file);
       rewind(finfo->file);
-      ap_rwrite(buf, bytes_read, r);
+#ifdef MANIFEST_DEBUG_MODE
+      fprintf(DEBUG, "About to write:\n%s\nto the client.\n", buf);
+      fflush(DEBUG);
+#endif
+      ap_rwrite(buf, finfo->size, r);
       
       //If we're supposed to be supercached right now, supercache us:
       if (hit_list_result >= FILE_TOTAL_CACHE_THRESHOLD) {
         t_finfo = (static_file_total*) malloc (sizeof(static_file_total));
-        t_finfo->size = bytes_read;
+        t_finfo->size = finfo->size;
         t_finfo->text = buf;
         t_finfo->mimetype = finfo->mimetype;
         hashmap_set(file_text_cache, filename, t_finfo);
@@ -656,6 +672,7 @@ static int run_static(request_rec* r, const char* filename) {
   
   char* buffer = (char*) malloc (size * sizeof(char));
   int true_size = fread(buffer, size, 1, file);
+  rewind(file);
 
   //If we should be cached right now, cache us:
   if (hit_list_result >= FILE_PTR_CACHE_THRESHOLD) {
@@ -821,20 +838,20 @@ static int run_manifest(request_rec* r, const char* filename) {
       case 'D':
         //Cache this line:
         if (!hashmap_contains(line_cache, r->uri) && hit_list_increment(line_cache_record, r->uri, LINE_CACHE_CLEAR_FREQ)) {
-          manifest_command * cached_command;
+          manifest_command* cached_command = (manifest_command*) malloc (sizeof(manifest_command));
           cached_command->disposition = 1;
           cached_command->file = strdup(new_file);
-          hashmap_set(line_cache, r->uri, new_file);
+          hashmap_set(line_cache, r->uri, (void*) cached_command);
         }
         rc = run_dynamic(r, new_file);
         break;
       default:
         //Cache this line:
         if (!hashmap_contains(line_cache, r->uri) && hit_list_increment(line_cache_record, r->uri, LINE_CACHE_CLEAR_FREQ)) {
-          manifest_command * cached_command;
+          manifest_command* cached_command = (manifest_command*) malloc (sizeof(manifest_command));
           cached_command->disposition = 0;
           cached_command->file = strdup(new_file);
-          hashmap_set(line_cache, r->uri, new_file);
+          hashmap_set(line_cache, r->uri, (void*) cached_command);
         }
         rc = run_static(r, new_file);
         break;
