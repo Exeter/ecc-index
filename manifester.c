@@ -10,18 +10,308 @@
 #include "http_protocol.h"
 #include "http_request.h"
 
+//Nothing will be logged in the DEBUG file if this is undefined:
+#define MANIFEST_DEBUG_MODE
+
+//There shall be no Log of Damnation if you remove this definition:
+#define DAMN_ABUSERS
+
+#define LINE_CACHE_BUCKET_SIZE 37
+#define LINE_CACHE_CLEAR_FREQ 3600
+#define LINE_CACHE_THRESHOLD 300
+#define STATIC_FILE_CLEAR_FREQ 3600
+#define FILE_TOTAL_CACHE_THRESHOLD 200
+#define FILE_PTR_CACHE_THRESHOLD 50
 #define BLOCK_SIZE 100
 #define MANIFEST_LINE 1000
 #define FORMAT_RESULT_SIZE 1000
 #define PATH_DESCRIPTOR_LENGTH 500
+#define BLACKLIST_THRESHOLD 100
+#define BLACKLIST_CLEAR_FREQUENCY 300
+#define DEFAULT_DOS_BUCKET_SIZE 30
 
 /*
   Copyright (c) 2013 Anthony Bau and Exeter Computing Club.
 */
 
+//Debugging file:
 FILE* DEBUG;
 
-const char* findMime(const char* ext) {
+//Access log:
+FILE* ACCESS_LOG;
+
+//Error log:
+FILE* ERROR_LOG;
+
+/*
+  THE LOG OF DAMNATNION
+    Those who make this log shall forever be condemned to an afterlife of wandering this barren earth, lusting after the contentment and fulfillment that once could have been theirs, thin wisps in the air, insubstantial as they gaze listlessly at the happy faces on this gray planet, their minds gutted and filled with glop, never resting but floating horribly about the burning ether.
+
+    Basically for IP addresses who try to abuse our HTTP server.
+*/
+FILE* LOG_OF_DAMNATION;
+
+/*========================
+ * HIT LIST FUNCTIONS for caching and DOS evasion
+ *========================*/
+
+struct hit_list_node;
+
+typedef struct hit_list_node hit_list_node;
+
+struct hit_list_node {
+  char* key;
+  int value;
+  hit_list_node* next;
+};
+
+int hash(const char* string) {
+  int r = 0;
+  for (int i = 0; string[i] != '\0'; ++i) r = r * 31 + string[i];
+  return r;
+}
+
+typedef struct {
+  hit_list_node** buckets;
+  int size;
+  time_t last_cleared;
+} hit_list;
+
+static void hit_list_clear(hit_list* map) {
+#ifdef MANIFEST_DEBUG_MODE
+  fputs("Clearing a map.\n", DEBUG);
+  fflush(DEBUG);
+#endif
+
+  int size = map->size;
+  for (int i = 0; i < size; ++i) {
+    hit_list_node* head = map->buckets[i];
+    if (head == NULL) continue;
+    else {
+      //Free every element here:
+      hit_list_node* foot = head->next;
+      while (foot != NULL) {
+        free(head->key);
+        free(head);
+        head = foot;
+        foot = head->next;
+      }
+    }
+  }
+}
+
+static int hit_list_increment(hit_list* map, const char* key, int clear_freq) {
+  //If it's time to refresh, do so and automatically clear this requester:
+  if (difftime(time(NULL), map->last_cleared) > clear_freq) {
+    hit_list_clear(map);
+    return 0;
+  }
+
+  int incorrect = 0, index;
+  hit_list_node* head = map->buckets[(index = hash(key) % map->size)];
+
+  //If there is nothing in this bucket yet, put something there:
+  if (head == 0) {
+    //Make a new element:
+    hit_list_node* new_element = (hit_list_node*) malloc (sizeof(hit_list_node));
+    
+    //Fill the new element in with the correct values:
+    new_element->key = strdup(key);
+    new_element->value = 1;
+    new_element->next = NULL;
+    
+    //Install the new element:
+    map->buckets[index] = new_element;
+
+#ifdef MANIFEST_DEBUG_MODE
+    fprintf(DEBUG, "The first hit to %s this clear period. Creating a node at index %d.\n", key, index);
+    fflush(DEBUG);
+#endif
+
+    return 1;
+  }
+
+  //Otherwise, search the list at that bucket:
+  while (head->next != NULL & (incorrect = strcmp(head->key, key))) {
+    head = head->next;
+  }
+
+  if (incorrect) {
+    //We have reached the end of the list and found no fit:
+    head->next = (hit_list_node*) malloc (sizeof(hit_list_node));
+    
+    //Make a new element with the correct values:
+    head->next->key = strdup(key);
+    head->next->value = 1;
+    head->next->next = NULL;
+
+#ifdef MANIFEST_DEBUG_MODE
+    fprintf(DEBUG, "This is the first hit to %s this clear period.\n", key);
+#endif
+
+    return 1;
+  }
+  else {
+#ifdef MANIFEST_DEBUG_MODE
+    fprintf(DEBUG, "%s was hit %d times this period.\n", key, head->value);
+#endif
+    //Otherwise, this element already exists, so we can increment it.
+    return (head->value += 1);
+  }
+
+  //If we've gotten here, the requester is benign.
+  return 1;
+}
+
+/*==================
+ *  HASHMAP FUNCTIONS for caching
+ *==================*/
+
+struct hashmap_node;
+
+typedef struct hashmap_node hashmap_node;
+
+struct hashmap_node {
+  char* key;
+  void* value;
+  hashmap_node* next;
+};
+
+typedef struct {
+  hashmap_node** buckets;
+  int size;
+  time_t last_cleared;
+} hashmap;
+
+static void hashmap_clear(hashmap* map) {
+#ifdef MANIFEST_DEBUG_MODE
+  fputs("Clearing a hashmap.\n", DEBUG);
+  fflush(DEBUG);
+#endif
+
+  int size = map->size;
+  for (int i = 0; i < size; ++i) {
+    hashmap_node* head = map->buckets[i];
+    if (head == NULL) continue;
+    else {
+      //Free every element here:
+      hashmap_node* foot = head->next;
+      while (foot != NULL) {
+        free(head->key);
+        free(head);
+        map->buckets[i] = NULL;
+        head = foot;
+        foot = head->next;
+      }
+    }
+  }
+}
+
+static int hashmap_contains(hashmap* map, char* key) {
+  hashmap_node* head = map->buckets[hash(key) % map->size];
+  while (head != NULL) {
+    if (strcmp(head->key, key) == 0) return 1;
+    head = head->next;
+  }
+  return 0;
+}
+
+static void* hashmap_get(hashmap* map, const char* key) {
+#ifdef MANIFEST_DEBUG_MODE
+  fputs("Starting hashmap_get.\n", DEBUG);
+  fflush(DEBUG);
+#endif
+  hashmap_node* head = map->buckets[hash(key) % map->size];
+  while (head != NULL && strcmp(head->key, key)) head = head->next;
+#ifdef MANIFEST_DEBUG_MODE
+  fputs("Found the proper head value.\n", DEBUG);
+  fflush(DEBUG);
+#endif
+  if (head == NULL) return NULL;
+  else {
+#ifdef MANIFEST_DEBUG_MODE
+    fprintf(DEBUG, "Returning the non-NULL value %u.\n", head->value);
+    fflush(DEBUG);
+#endif
+    return head->value;
+  }
+}
+
+static void hashmap_set(hashmap* map, const char* key, void* value) {
+#ifdef MANIFEST_DEBUG_MODE
+  fprintf(DEBUG, "Setting hashmap %u value %s to %u\n", map, key, value);
+  fflush(DEBUG);
+#endif
+  int index, incorrect = 1;
+  hashmap_node* head = map->buckets[(index = hash(key) % map->size)];
+  if (head != NULL) while (head->next != NULL && (incorrect = strcmp(head->key, key))) head = head->next;
+  if (incorrect) {
+    //Create and a new node.
+    hashmap_node* new_el = (hashmap_node*) malloc (sizeof(hashmap_node));
+    new_el->key = strdup(key);
+    new_el->value = value;
+    new_el->next = NULL;
+
+    //Install it.
+    if (head == NULL) map->buckets[index] = new_el;
+    else head->next = new_el;
+  }
+  else {
+    //Set the value of the matching element.
+    head->value = value;
+  }
+}
+
+/*================
+ * SPECIAL CACHING TYPES
+ *================*/
+
+//Represents something to execute:
+typedef struct {
+  int disposition;
+  char* file;
+} manifest_command;
+
+//Represents a static file for reading:
+typedef struct {
+  FILE* file;
+  char* mimetype;
+  int size;
+} static_file_record;
+
+typedef struct {
+  char* text;
+  char* mimetype;
+  int size;
+} static_file_total;
+
+/*=================
+ * GLOBAL VARIABLES
+ *=================*/
+
+//A hit list for DOS evasion:
+static hit_list * server_hit_list;
+
+//A hit list for manifest line caching:
+static hit_list * line_cache_record;
+
+//A hit list for file name caching:
+static hit_list * file_access_record;
+
+//A hashmap for manifest line caching:
+static hashmap * line_cache; //ALL VALUE TYPES SHOULD BE (manifest_command*)
+
+//A hashmap for file name to file pointer caching:
+static hashmap * file_ptr_cache; //ALL VALUE TYPES SHOULD BE (static_file_record*)
+
+//A hashmap for file name to full file string caching:
+static hashmap * file_text_cache; //ALL VALUE TYPES SHOULD BE (char*)
+
+/*=================
+ * SERVER TOOLS
+ *=================*/
+
+char* findMime(const char* ext) {
   FILE* mimetypes = fopen("/srv/http/conf/mime.types", "r");
   if (mimetypes != NULL) {
     int nbytes = 100;
@@ -54,6 +344,10 @@ const char* findMime(const char* ext) {
           //If we have found the correct mimetype, return it
           if (ext[s] == '\0' && !bad) {
             free(line);
+#ifdef MANIFEST_DEBUG_MODE
+            fprintf(DEBUG, "Malloced a mimetype that I'll return. It's %u.\n", mimetype);
+            fflush(DEBUG);
+#endif
             return mimetype;
           }
           else {
@@ -73,10 +367,10 @@ const char* findMime(const char* ext) {
       free(mimetype);
     }
     free(line);
-    return "text/plain";
+    return strdup("text/plain");
   }
   else {
-    return "text/plain";
+    return strdup("text/plain");
   }
 }
 
@@ -114,10 +408,15 @@ static int util_read (request_rec* r, const char** rbuf, apr_off_t* size) {
   return (rc);
 }
 
+/*===============
+ * FILE RUNNING FUNCTIONS
+ *===============*/
+
 static int run_dynamic(request_rec* r, const char* file) {
-  
-  fprintf(DEBUG, "Running file %s.", file);
+#ifdef MANIFEST_DEBUG_MODE
+  fprintf(DEBUG, "Running %s dynamically.\n", file);
   fflush(DEBUG);
+#endif
 
   //Declare pipes:
   int stdin_pipe[2];
@@ -125,9 +424,9 @@ static int run_dynamic(request_rec* r, const char* file) {
   int stderr_pipe[2];
 
   //Make pipes:
-  pipe2(stdin_pipe, O_NONBLOCK);
-  pipe2(stdout_pipe, O_NONBLOCK);
-  pipe2(stderr_pipe, O_NONBLOCK);
+  if (pipe2(stdin_pipe, O_NONBLOCK) < 0) return HTTP_INTERNAL_SERVER_ERROR;
+  if (pipe2(stdout_pipe, O_NONBLOCK) < 0) return HTTP_INTERNAL_SERVER_ERROR;
+  if (pipe2(stderr_pipe, O_NONBLOCK) < 0) return HTTP_INTERNAL_SERVER_ERROR;
 
   //Fork ourselves:
   int pid = fork();
@@ -173,12 +472,12 @@ static int run_dynamic(request_rec* r, const char* file) {
     fields = apr_table_elts(r->headers_in);
     e = (apr_table_entry_t*) fields->elts;
     for (int i = 0; i < fields->nelts; ++i) {
-      write(stdin_pipe[1], e[i].key, strlen(e[i].key));
-      write(stdin_pipe[1], ":", 1);
-      write(stdin_pipe[1], e[i].val, strlen(e[i].val));
-      write(stdin_pipe[1], "\n", 1);
+      if (write(stdin_pipe[1], e[i].key, strlen(e[i].key)) < 0) return HTTP_INTERNAL_SERVER_ERROR;
+      if (write(stdin_pipe[1], ":", 1) < 0) return HTTP_INTERNAL_SERVER_ERROR;
+      if (write(stdin_pipe[1], e[i].val, strlen(e[i].val)) < 0) return HTTP_INTERNAL_SERVER_ERROR;
+      if (write(stdin_pipe[1], "\n", 1) < 0) return HTTP_INTERNAL_SERVER_ERROR;
     }
-    write(stdin_pipe[1], "\n", 1);
+    if (write(stdin_pipe[1], "\n", 1) < 0) return HTTP_INTERNAL_SERVER_ERROR;
     
     if (strcmp("POST", r->method) == 0) {
       //Read the post data:
@@ -187,7 +486,7 @@ static int run_dynamic(request_rec* r, const char* file) {
       util_read (r, &buf, &size);
       
       //Write it to the child:
-      write(stdin_pipe[1], buf, (size_t) size);
+      if (write(stdin_pipe[1], buf, (size_t) size) < 0) return HTTP_INTERNAL_SERVER_ERROR;
     }
 
     //Wait for the child to finish:
@@ -245,8 +544,10 @@ static int run_dynamic(request_rec* r, const char* file) {
 
     //If we don't get to the end of the headers, say so:
     if (!headers_ended_properly) {
+#ifdef MANIFEST_DEBUG_MODE
       fputs("End of script before headers.", DEBUG);
       fflush(DEBUG);
+#endif
       return HTTP_INTERNAL_SERVER_ERROR;
     }
     
@@ -260,46 +561,149 @@ static int run_dynamic(request_rec* r, const char* file) {
 }
 
 static int run_static(request_rec* r, const char* filename) {
+#ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "Running static file %s.\n", filename);
   fflush(DEBUG);
-
-  int size;
-  FILE* file = fopen(filename, "rb");
-
-  if (file == NULL) return HTTP_NOT_FOUND;
+#endif
   
-  //Get the size of the file:
-  fseek(file, 0L, SEEK_END);
-  size = ftell(file);
-  fseek(file, 0L, SEEK_SET);
+  //See if we are cached:
+  int hit_list_result;
+  static_file_record* finfo;
+  static_file_total* t_finfo;
+  if ((hit_list_result = hit_list_increment(file_access_record, filename, STATIC_FILE_CLEAR_FREQ)) >= FILE_PTR_CACHE_THRESHOLD) {
+    if (hit_list_result >= FILE_TOTAL_CACHE_THRESHOLD && (t_finfo = (static_file_total*) hashmap_get(file_text_cache, filename)) != NULL) {
+#ifdef MANIFEST_DEBUG_MODE
+      fputs("Supercache hit!\n", DEBUG);
+      fflush(DEBUG);
+      fprintf(DEBUG, "About to write\n%s\n to the client.\n", t_finfo->text);
+      fflush(DEBUG);
+#endif
+      //Total file cache hit.
+      ap_set_content_type(r, t_finfo->mimetype);
+      ap_set_content_length(r, t_finfo->size);
+      ap_rwrite(t_finfo->text, t_finfo->size, r);
+      return OK;
+    }
+    else if ((finfo = (static_file_record*) hashmap_get(file_ptr_cache, filename)) != NULL) {
+#ifdef MANIFEST_DEBUG_MODE
+      fputs("Static file cache hit (not super)!\n", DEBUG);
+      fflush(DEBUG);
+#endif
+      //File descriptor cache hit.
+      ap_set_content_type(r, finfo->mimetype);
+      ap_set_content_length(r, finfo->size);
+      char* buf = (char*) malloc (finfo->size * sizeof(char));
+      int bytes_read = fread(buf, finfo->size, 1, finfo->file);
+      rewind(finfo->file);
+#ifdef MANIFEST_DEBUG_MODE
+      fprintf(DEBUG, "About to write:\n%s\nto the client.\n", buf);
+      fflush(DEBUG);
+#endif
+      ap_rwrite(buf, finfo->size, r);
+      
+      //If we're supposed to be supercached right now, supercache us:
+      if (hit_list_result >= FILE_TOTAL_CACHE_THRESHOLD) {
+        t_finfo = (static_file_total*) malloc (sizeof(static_file_total));
+        t_finfo->size = finfo->size;
+        t_finfo->text = buf;
+        t_finfo->mimetype = finfo->mimetype;
+        hashmap_set(file_text_cache, filename, t_finfo);
+      }
 
-  fprintf(DEBUG, "Got length of file: %d.\n", size);
+      return OK;
+    }
+  }
+  
+  fputs("Apparently no cache hit... :(\n", DEBUG);
   fflush(DEBUG);
+  
+  //If we get here, we are apparently not cached.
 
+  //Find the extension:
   char extension[20];
   char* dot_ptr = strrchr(filename, '.') + 1;
   int ext_len = filename + strlen(filename) - dot_ptr;
   memcpy(extension, dot_ptr, ext_len);
   extension[ext_len] = 0;
+  char* mimetype = findMime(extension);
 
-  fprintf(DEBUG, "File extension is %s. Thus mimeType is %s.", extension, findMime(extension));
+#ifdef MANIFEST_DEBUG_MODE
+  fprintf(DEBUG, "File extension is %s. Thus mimeType is %s.\n", extension, mimetype);
   fflush(DEBUG);
+#endif
 
-  ap_set_content_type(r, findMime(extension));
+  //Set the mimetype to the proper value for this extension:
+  ap_set_content_type(r, mimetype);
+  
+/*
+  //TODO Get this gorram thing working.
+  //Open the file and send it:
+  apr_file_t* file = 0;
+  int* sent;
+  char buf[30];
+  int result = 0;
+  result = apr_file_open(&file, filename, APR_READ | APR_BINARY, APR_OS_DEFAULT, r->pool);
 
-  //Read out the file:
-  char* contents = (char*) malloc(size + 1);
-  size_t length = fread(contents, 1, size, file);
-  contents[length] = 0;
+#ifdef MANIFEST_DEBUG_MODE
+  fprintf(DEBUG, "apr_file_open came back with result code %s (%s).\n", apr_strerror(result, buf, 30), buf, file);
+  fflush(DEBUG);
+#endif
 
-  //NOTE not working for binary files:
-  //ap_rputs(contents, r);
+  //TODO Get this gorram thing working.
 
-  //TODO try not to iterate over the entire thing...
-  for (int i = 0; i < length; ++i) ap_rputc(contents[i], r);
-  free(contents);
+  apr_finfo_t file_info;
+  result = apr_file_info_get(&file_info, APR_FINFO_SIZE, file);
+
+#ifdef MANIFEST_DEBUG_MODE
+  fprintf(DEBUG, "apr_file_info_get came back with result code %s (%s) (file size looks like %d; rfinfo says %d).\n", apr_strerror(result, buf, 30), buf, file_info.size, r->finfo.size);
+  fflush(DEBUG);
+#endif
+
+  ap_set_content_length(r, file_info.size);
+  ap_send_fd(file, r, 0, 3964, (apr_size_t*) sent);
+*/
+
+  FILE* file = fopen(filename, "rb");
+  
+  //Get file length
+  fseek(file, 0L, SEEK_END);
+  int size = ftell(file);
+  rewind(file);
+  
+  char* buffer = (char*) malloc (size * sizeof(char));
+  int true_size = fread(buffer, size, 1, file);
+  rewind(file);
+
+  //If we should be cached right now, cache us:
+  if (hit_list_result >= FILE_PTR_CACHE_THRESHOLD) {
+#ifdef MANIFEST_DEBUG_MODE
+    fputs("It's about time we cached this thing.\n", DEBUG);
+    fflush(DEBUG);
+#endif
+
+    finfo = (static_file_record*) malloc (sizeof(static_file_record*));
+    finfo->file = file;
+    finfo->size = size;
+    finfo->mimetype = strdup(mimetype);
+    hashmap_set(file_ptr_cache, filename, finfo);
+  }
+
+#ifdef MANIFEST_DEBUG_MODE
+  fprintf(DEBUG, "Almost done! Going to write %d bytes of \n%s\nto the user.\n", size, buffer);
+  fflush(DEBUG);
+#endif
+
+  ap_rwrite(buffer, size, r);
+
+  free(buffer);
+  free(mimetype);
+
   return OK;
 }
+
+/*================
+ * THE MANIFEST PARSER
+ *================*/
 
 int matches(regmatch_t** backrefs, char* form, char* path, char* match) {
   regex_t compiled;
@@ -322,8 +726,6 @@ int matches(regmatch_t** backrefs, char* form, char* path, char* match) {
 
   //Make our backrefs array
   *backrefs = (regmatch_t*) malloc ((nbackrefs + 1) * sizeof(regmatch_t));
-
-  fprintf(DEBUG, "MATCH has backrefs as %u\n", backrefs);
   
   int rc;
   if ((rc = regcomp(&compiled, match, REG_EXTENDED))) {
@@ -340,45 +742,20 @@ const char* format(regmatch_t* backref, char* format, char* path) {
   char* result = (char*) malloc (FORMAT_RESULT_SIZE * sizeof(char));
   int mark = 0;
 
-  fprintf(DEBUG, "Running formatter on %u.\n", format);
-  fflush(DEBUG);
-
   for (int i = 0; format[i] != '\0'; ++i & ++mark) {
-    fputs("Running another loop...\n", DEBUG);
-    fflush(DEBUG);
-
     if (format[i] == '$') {
       //Get the requested backref index:
       
-      fputs("About to find requested backref.\n", DEBUG);
-      fflush(DEBUG);
-
       char n[3];
       ++i;
       for (int s = 0; format[i] != '$'; ++i & ++s) n[s] = format[i];
       ++i;
       n[i] = '\0';
-      
-      fprintf(DEBUG, "About to declare stuff. Requested backref is %d.\n", atoi(n));
-      fflush(DEBUG);
-
-      fprintf(DEBUG, "Path is %s, with pointer %u.\n", path);
-      fflush(DEBUG);
-
-      fprintf(DEBUG, "Backref pointer is %u.\n", backref);
-      fflush(DEBUG);
 
       int which = atoi(n);
       char* beg_ptr = path + backref[which].rm_so;
       int size = backref[which].rm_eo - backref[which].rm_so;
       
-      //fprintf(DEBUG, "Attempting to copy %d bytes from %u (char %c) to %u (char %c).", size, beg_ptr, *beg_ptr, result + mark, *(result + mark));
-      fputs("Done declaring stuff...\n", DEBUG);
-      fflush(DEBUG);
-
-      fprintf(DEBUG, "Attempting to copy %d bytes from %d to %d.\n", size, beg_ptr, result + mark);
-      fflush(DEBUG);
-
       //Get the request backref index:
       memcpy(result + mark, beg_ptr, size);
       mark += backref[which].rm_eo - backref[which].rm_so;
@@ -387,9 +764,6 @@ const char* format(regmatch_t* backref, char* format, char* path) {
       ++i;
     }
     else {
-      fprintf(DEBUG, "Not $, instead %c.\n", format[i]);
-      fflush(DEBUG);
-
       result[mark] = format[i];
     }
   }
@@ -400,8 +774,10 @@ const char* format(regmatch_t* backref, char* format, char* path) {
 }
 
 static int run_manifest(request_rec* r, const char* filename) {
+#ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "Running manifest file %s.\n", filename);
   fflush(DEBUG);
+#endif
   
   FILE* f = fopen(filename, "r");
   char* path = r->uri;
@@ -442,17 +818,10 @@ static int run_manifest(request_rec* r, const char* filename) {
     //Again, if the line is misformatted, say so:
     if (line == '\0') return HTTP_INTERNAL_SERVER_ERROR;
 
-    fprintf(DEBUG, "Attempting to match %s with %s and format %s... (address of form is %u).\n", r->uri, match, form, form);
-    fflush(DEBUG);
-
     //Check if we match
     if (matches(&backref, form, r->uri, match)) {
-      fputs("Matches!\n", DEBUG);
-      fprintf(DEBUG, "Address of form is %u.\n", form);
-      fflush(DEBUG);
-
       //If we do, format our path
-      new_file = (const char*) format(backref, form, r->uri);
+      new_file = (char*) format(backref, form, r->uri);
       free(backref);
     }
     else {
@@ -467,13 +836,29 @@ static int run_manifest(request_rec* r, const char* filename) {
         rc = run_manifest(r, new_file);
         break;
       case 'D':
+        //Cache this line:
+        if (!hashmap_contains(line_cache, r->uri) && hit_list_increment(line_cache_record, r->uri, LINE_CACHE_CLEAR_FREQ)) {
+          manifest_command* cached_command = (manifest_command*) malloc (sizeof(manifest_command));
+          cached_command->disposition = 1;
+          cached_command->file = strdup(new_file);
+          hashmap_set(line_cache, r->uri, (void*) cached_command);
+        }
         rc = run_dynamic(r, new_file);
         break;
       default:
+        //Cache this line:
+        if (!hashmap_contains(line_cache, r->uri) && hit_list_increment(line_cache_record, r->uri, LINE_CACHE_CLEAR_FREQ)) {
+          manifest_command* cached_command = (manifest_command*) malloc (sizeof(manifest_command));
+          cached_command->disposition = 0;
+          cached_command->file = strdup(new_file);
+          hashmap_set(line_cache, r->uri, (void*) cached_command);
+        }
         rc = run_static(r, new_file);
         break;
     }
+
     free (new_file);
+
     return rc;
   }
   
@@ -481,17 +866,74 @@ static int run_manifest(request_rec* r, const char* filename) {
   return HTTP_NOT_FOUND;
 }
 
-static int manifester(request_rec* r) {
-  //Open debug logging file
-  DEBUG = fopen("/srv/http/logs/manifester.debug", "w");
+inline hit_list* create_hit_list(int size) {
+  hit_list* new_hit_list = (hit_list *) malloc (sizeof(hit_list));
+  new_hit_list->buckets = (hit_list_node **) calloc (DEFAULT_DOS_BUCKET_SIZE, sizeof(hit_list_node*));
+  new_hit_list->size = DEFAULT_DOS_BUCKET_SIZE;
+  new_hit_list->last_cleared = time(NULL);
+  return new_hit_list;
+}
 
-  fprintf(DEBUG, "JUST HANDLED REQUEST %s.\n", r->uri);  
+inline hashmap* create_hashmap(int size) {
+  hashmap* new_hashmap = (hashmap *) malloc (sizeof(hashmap));
+  new_hashmap->buckets = (hashmap_node**) calloc (size, sizeof(hashmap_node*));
+  new_hashmap->size = size;
+  new_hashmap->last_cleared = time(NULL);
+  return new_hashmap;
+}
+
+static void* setup_req_densities(apr_pool_t *p, server_rec *s) {
+  
+  //Create the hit lists
+  server_hit_list = create_hit_list(DEFAULT_DOS_BUCKET_SIZE);
+  line_cache_record = create_hit_list(DEFAULT_DOS_BUCKET_SIZE);
+  file_access_record = create_hit_list(DEFAULT_DOS_BUCKET_SIZE);
+  
+  //Create the caches
+  line_cache = create_hashmap(LINE_CACHE_BUCKET_SIZE);
+  file_ptr_cache = create_hashmap(LINE_CACHE_BUCKET_SIZE);
+  file_text_cache = create_hashmap(LINE_CACHE_BUCKET_SIZE);
+}
+
+/*=================
+ * APACHE REGISTRATON STUFF
+ *=================*/
+
+static int manifester(request_rec* r) {
+#ifdef MANIFEST_DEBUG_MODE
+  fprintf(DEBUG, "\nPID %d (name %s) handled request %s from %s.\n", getpid(), r->server->process->argv[0], r->uri, r->connection->client_ip);
+  fflush(DEBUG);
+#endif
+
+
+  //REQUEST HANDLING STEP 1: DOS EVASION
+
+  if (hit_list_increment(server_hit_list, r->connection->client_ip, BLACKLIST_CLEAR_FREQUENCY) > BLACKLIST_THRESHOLD) {
+    return HTTP_FORBIDDEN;
+  }
+  
+  fputs("Benign requester.\n", DEBUG);
   fflush(DEBUG);
 
+  //REQUEST HANDLING STEP 2: CHECK CACHE HIT
+  manifest_command* cached_command;
+  if ((cached_command = (manifest_command*) hashmap_get(line_cache, r->uri)) != NULL) return (cached_command->disposition == 0 ? run_static(r, cached_command->file) : (cached_command->disposition == 1 ? run_dynamic(r, cached_command->file) : HTTP_INTERNAL_SERVER_ERROR));
+
+  fputs("No cache hit.\n", DEBUG);
+  fflush(DEBUG);
+
+  //REQUEST HANDLING STEP 3: RUN MANIFEST FILE
   return run_manifest(r, "/srv/http/manifest.txt");
 }
 
 static void register_hooks(apr_pool_t* pool) {
+#ifdef MANIFEST_DEBUG_MODE
+  DEBUG = fopen("/srv/http/logs/manifester.debug", "w");
+#endif
+
+#ifdef DAMN_ABUSERS
+  LOG_OF_DAMNATION = fopen("/srv/http/logs/damnation.log", "w");
+#endif
   ap_hook_handler(manifester, NULL, NULL, APR_HOOK_LAST);
 }
 
@@ -499,7 +941,7 @@ module AP_MODULE_DECLARE_DATA manifester_module = {
   STANDARD20_MODULE_STUFF,
   NULL,
   NULL,
-  NULL,
+  setup_req_densities,
   NULL,
   NULL,
   register_hooks

@@ -85,9 +85,15 @@
     }
     .news_header {
       cursor:hand;
-      font-size:50px;
       border-bottom:1px dotted #000;
       margin-bottom:5px;
+    }
+    .news_header_big {
+      font-size:50px;
+    }
+    .news_header_timestamp {
+      font-family:monospace;
+      font-size:20px;
     }
     .news_body {
       padding-left:10px;  
@@ -175,7 +181,7 @@
           success:function(data) {
             for (var i = 0; i < data.posts.length; i += 1) {
               var news_wrapper = $(document.createElement("div")).addClass("news"),
-                  news_header = $(document.createElement("div")).addClass("news_header").text(data.posts[i].title),
+                  news_header = $(document.createElement("div")).addClass("news_header").append($(document.createElement("span")).addClass("news_header_big").text(data.posts[i].title)).append($(document.createElement("span")).addClass("news_header_timestamp").text(data.posts[i].timestamp)),
                   news_body = $(document.createElement("div")).addClass("news_body").html(data.posts[i].body);
               news_header.click((function(news_body) {
                 return function() {
