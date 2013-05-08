@@ -39,7 +39,7 @@ int main(int n, char* argv[]) {
   int64_t date;
   int step = sqlite3_step(stmt);
   for (int i = 0; i < MAX_POSTS; i += 1) {
-    out << "{\"title\":" << json_stringify((const char*) sqlite3_column_text(stmt, 2)) << ", \"body\":" << json_stringify((const char*) sqlite3_column_text(stmt, 3)) << "}";
+    printf("{\"timestamp\":%d, \"title\":%s, \"body\":%s}", sqlite3_column_int(stmt, 1), json_stringify((const char*) sqlite3_column_text(stmt, 2)), json_stringify((const char*) sqlite3_column_text(stmt, 3)));
     date = (int64_t) sqlite3_column_int64(stmt, 1);
     step = sqlite3_step(stmt);
     if (step == SQLITE_ROW && i < MAX_POSTS - 1) out << ',';
