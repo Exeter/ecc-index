@@ -93,7 +93,8 @@
     }
     .news_header_timestamp {
       font-family:monospace;
-      font-size:20px;
+      font-size:12px;
+      text-align:right;
     }
     .news_body {
       padding-left:10px;  
@@ -150,6 +151,11 @@
   <script src="/jquery.min.js"></script>
   <script src="/md5.js"></script>
   <script>
+    function timestamp_format(epoch_time) {
+      var d = new Date(0);
+      d.setUTCSeconds(epoch_time);
+      return d.toLocaleString();
+    }
     $(function() {
       var head = $(".header_bar"),
           main = $(".main"),
@@ -181,7 +187,7 @@
           success:function(data) {
             for (var i = 0; i < data.posts.length; i += 1) {
               var news_wrapper = $(document.createElement("div")).addClass("news"),
-                  news_header = $(document.createElement("div")).addClass("news_header").append($(document.createElement("span")).addClass("news_header_big").text(data.posts[i].title)).append($(document.createElement("span")).addClass("news_header_timestamp").text(data.posts[i].timestamp)),
+                  news_header = $(document.createElement("div")).addClass("news_header").append($(document.createElement("span")).addClass("news_header_big").text(data.posts[i].title)).append($(document.createElement("span")).addClass("news_header_timestamp").text(timestamp_format(data.posts[i].timestamp))),
                   news_body = $(document.createElement("div")).addClass("news_body").html(data.posts[i].body);
               news_header.click((function(news_body) {
                 return function() {
