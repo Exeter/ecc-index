@@ -35,17 +35,17 @@ int main(int n, char* argv[]) {
     sqlite3_prepare_v2(db, "SELECT * FROM news ORDER BY timestamp DESC", -1, &stmt, &pzTail);
   }
   stringstream out;
-  out << "{\"posts\":[";
+  printf("%s","{\"posts\":[");
   int64_t date;
   int step = sqlite3_step(stmt);
   for (int i = 0; i < MAX_POSTS; i += 1) {
-    printf("{\"timestamp\":%d, \"title\":%s, \"body\":%s}", sqlite3_column_int(stmt, 1), json_stringify((const char*) sqlite3_column_text(stmt, 2)), json_stringify((const char*) sqlite3_column_text(stmt, 3)));
+    printf("{\"timestamp\":%d, \"title\":%s, \"body\":%s}", sqlite3_column_int(stmt, 1), json_stringify((const char*) sqlite3_column_text(stmt, 2)).c_str(), json_stringify((const char*) sqlite3_column_text(stmt, 3)).c_str());
     date = (int64_t) sqlite3_column_int64(stmt, 1);
     step = sqlite3_step(stmt);
-    if (step == SQLITE_ROW && i < MAX_POSTS - 1) out << ',';
+    if (step == SQLITE_ROW && i < MAX_POSTS - 1) putc(',', stdout);
     else break;
   }
-  out << "],\"last\":" << date << "}";
+  printf("],\"last\":%d}", date);
   printf("%s",out.str().c_str());
   sqlite3_finalize(stmt);
   sqlite3_close(db);
