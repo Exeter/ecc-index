@@ -26,8 +26,8 @@
 #define MANIFEST_LINE 1000
 #define FORMAT_RESULT_SIZE 1000
 #define PATH_DESCRIPTOR_LENGTH 500
-#define BLACKLIST_THRESHOLD 100
-#define BLACKLIST_CLEAR_FREQUENCY 300
+#define BLACKLIST_THRESHOLD 720
+#define BLACKLIST_CLEAR_FREQUENCY 3600
 #define DEFAULT_DOS_BUCKET_SIZE 30
 
 /*
@@ -119,7 +119,7 @@ static int hit_list_increment(hit_list* map, const char* key, int clear_freq) {
     new_element->key = strdup(key);
     new_element->value = 1;
     new_element->next = NULL;
-    
+
     //Install the new element:
     map->buckets[index] = new_element;
 
@@ -230,7 +230,7 @@ static void* hashmap_get(hashmap* map, const char* key) {
   if (head == NULL) return NULL;
   else {
 #ifdef MANIFEST_DEBUG_MODE
-    fprintf(DEBUG, "Returning the non-NULL value %u.\n", head->value);
+    fprintf(DEBUG, "Returning the non-NULL value %p.\n", head->value);
     fflush(DEBUG);
 #endif
     return head->value;
@@ -239,7 +239,7 @@ static void* hashmap_get(hashmap* map, const char* key) {
 
 static void hashmap_set(hashmap* map, const char* key, void* value) {
 #ifdef MANIFEST_DEBUG_MODE
-  fprintf(DEBUG, "Setting hashmap %u value %s to %u\n", map, key, value);
+  fprintf(DEBUG, "Setting hashmap %p value %s to %p\n", map, key, value);
   fflush(DEBUG);
 #endif
   int index, incorrect = 1;
@@ -312,7 +312,7 @@ static hashmap * file_text_cache; //ALL VALUE TYPES SHOULD BE (char*)
  *=================*/
 
 char* findMime(const char* ext) {
-  FILE* mimetypes = fopen("/srv/http/conf/mime.types", "r");
+  FILE* mimetypes = fopen("/srv/http/conf/mime.types", "r"); //TODO this should be loaded ONCE and served thereafter from RAM.
   if (mimetypes != NULL) {
     int nbytes = 100;
     char* line = (char*) malloc (100 * sizeof(char));
@@ -345,7 +345,7 @@ char* findMime(const char* ext) {
           if (ext[s] == '\0' && !bad) {
             free(line);
 #ifdef MANIFEST_DEBUG_MODE
-            fprintf(DEBUG, "Malloced a mimetype that I'll return. It's %u.\n", mimetype);
+            fprintf(DEBUG, "Malloced a mimetype that I'll return. It's %p.\n", mimetype);
             fflush(DEBUG);
 #endif
             return mimetype;
@@ -575,7 +575,7 @@ static int run_static(request_rec* r, const char* filename) {
 #ifdef MANIFEST_DEBUG_MODE
       fputs("Supercache hit!\n", DEBUG);
       fflush(DEBUG);
-      fprintf(DEBUG, "About to write\n%s\n to the client.\n", t_finfo->text);
+      fputs("About to write to the client.", DEBUG);
       fflush(DEBUG);
 #endif
       //Total file cache hit.
@@ -596,7 +596,7 @@ static int run_static(request_rec* r, const char* filename) {
       int bytes_read = fread(buf, finfo->size, 1, finfo->file);
       rewind(finfo->file);
 #ifdef MANIFEST_DEBUG_MODE
-      fprintf(DEBUG, "About to write:\n%s\nto the client.\n", buf);
+      fputs("About to write to the client.\n", DEBUG);
       fflush(DEBUG);
 #endif
       ap_rwrite(buf, finfo->size, r);
@@ -613,8 +613,9 @@ static int run_static(request_rec* r, const char* filename) {
       return OK;
     }
   }
-  
+#ifdef MANIFEST_DEBUG_MODE 
   fputs("Apparently no cache hit... :(\n", DEBUG);
+#endif
   fflush(DEBUG);
   
   //If we get here, we are apparently not cached.
@@ -634,34 +635,6 @@ static int run_static(request_rec* r, const char* filename) {
 
   //Set the mimetype to the proper value for this extension:
   ap_set_content_type(r, mimetype);
-  
-/*
-  //TODO Get this gorram thing working.
-  //Open the file and send it:
-  apr_file_t* file = 0;
-  int* sent;
-  char buf[30];
-  int result = 0;
-  result = apr_file_open(&file, filename, APR_READ | APR_BINARY, APR_OS_DEFAULT, r->pool);
-
-#ifdef MANIFEST_DEBUG_MODE
-  fprintf(DEBUG, "apr_file_open came back with result code %s (%s).\n", apr_strerror(result, buf, 30), buf, file);
-  fflush(DEBUG);
-#endif
-
-  //TODO Get this gorram thing working.
-
-  apr_finfo_t file_info;
-  result = apr_file_info_get(&file_info, APR_FINFO_SIZE, file);
-
-#ifdef MANIFEST_DEBUG_MODE
-  fprintf(DEBUG, "apr_file_info_get came back with result code %s (%s) (file size looks like %d; rfinfo says %d).\n", apr_strerror(result, buf, 30), buf, file_info.size, r->finfo.size);
-  fflush(DEBUG);
-#endif
-
-  ap_set_content_length(r, file_info.size);
-  ap_send_fd(file, r, 0, 3964, (apr_size_t*) sent);
-*/
 
   FILE* file = fopen(filename, "rb");
   
@@ -685,11 +658,14 @@ static int run_static(request_rec* r, const char* filename) {
     finfo->file = file;
     finfo->size = size;
     finfo->mimetype = strdup(mimetype);
+#ifdef MANIFEST_DEBUG_MODE
+    fprintf("Storing as mimetype %s.\n", finfo->mimetype);
+#endif
     hashmap_set(file_ptr_cache, filename, finfo);
   }
 
 #ifdef MANIFEST_DEBUG_MODE
-  fprintf(DEBUG, "Almost done! Going to write %d bytes of \n%s\nto the user.\n", size, buffer);
+  fprintf(DEBUG, "Almost done! Going to write %d bytes of data to the user.\n", size);
   fflush(DEBUG);
 #endif
 
@@ -728,7 +704,9 @@ int matches(regmatch_t** backrefs, char* form, char* path, char* match) {
   *backrefs = (regmatch_t*) malloc ((nbackrefs + 1) * sizeof(regmatch_t));
   
   int rc;
-  if ((rc = regcomp(&compiled, match, REG_EXTENDED))) {
+  char tmatch[strlen(match) + 1];
+  sprintf(tmatch, "^%s$", match); //Enforce a match of the entire string
+  if ((rc = regcomp(&compiled, tmatch, REG_EXTENDED))) {
     //If we have an error, return it.
     return (rc);
   }
@@ -866,7 +844,7 @@ static int run_manifest(request_rec* r, const char* filename) {
   return HTTP_NOT_FOUND;
 }
 
-inline hit_list* create_hit_list(int size) {
+hit_list* create_hit_list(int size) {
   hit_list* new_hit_list = (hit_list *) malloc (sizeof(hit_list));
   new_hit_list->buckets = (hit_list_node **) calloc (DEFAULT_DOS_BUCKET_SIZE, sizeof(hit_list_node*));
   new_hit_list->size = DEFAULT_DOS_BUCKET_SIZE;
@@ -874,7 +852,7 @@ inline hit_list* create_hit_list(int size) {
   return new_hit_list;
 }
 
-inline hashmap* create_hashmap(int size) {
+hashmap* create_hashmap(int size) {
   hashmap* new_hashmap = (hashmap *) malloc (sizeof(hashmap));
   new_hashmap->buckets = (hashmap_node**) calloc (size, sizeof(hashmap_node*));
   new_hashmap->size = size;
@@ -907,19 +885,21 @@ static int manifester(request_rec* r) {
 
 
   //REQUEST HANDLING STEP 1: DOS EVASION
-
   if (hit_list_increment(server_hit_list, r->connection->client_ip, BLACKLIST_CLEAR_FREQUENCY) > BLACKLIST_THRESHOLD) {
     return HTTP_FORBIDDEN;
   }
-  
+#ifdef MANIFEST_DEBUG_MODE 
   fputs("Benign requester.\n", DEBUG);
+#endif
   fflush(DEBUG);
 
   //REQUEST HANDLING STEP 2: CHECK CACHE HIT
   manifest_command* cached_command;
   if ((cached_command = (manifest_command*) hashmap_get(line_cache, r->uri)) != NULL) return (cached_command->disposition == 0 ? run_static(r, cached_command->file) : (cached_command->disposition == 1 ? run_dynamic(r, cached_command->file) : HTTP_INTERNAL_SERVER_ERROR));
 
+#ifdef MANIFEST_DEBUG_MODE
   fputs("No cache hit.\n", DEBUG);
+#endif
   fflush(DEBUG);
 
   //REQUEST HANDLING STEP 3: RUN MANIFEST FILE

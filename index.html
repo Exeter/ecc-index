@@ -1,291 +1,220 @@
 <html>
-<!--
-  Copyright (c) 2013 Anthony Bau and Exeter Computing Club
-  MIT license: opensource.org/licenses/MIT
--->
-<head>
-  <title>Exeter Computing Club</title>
-  <style>
-    body {
-      font-family:arial;
-    }
-    .header_bar {
-      border-radius:5px;
-      border: 1px solid #000;
-      background-color:#811;
-      background:-webkit-linear-gradient(#933, #811);
-      background:-moz-linear-gradient(top, #822, #911);
-    }
-    .big_header {
-      height:50px;
-      font-size:45px;
-      color:#fff;
-      padding-left:10px;
-    }
-    .link_bar {
-      height:30px;
-      border-top:1px solid #DAA520;
-      margin-bottom:0;
-    }
-    .bar_link {
-      display:block;
-      float:left;
-      height:100%;
-      line-height:30px;
-      color:#fff;
-      padding-left:5px;
-      padding-right:5px;
-      text-decoration:none;
-      cursor:pointer;
-    }
-    .publish {
-      float:right;
-    }
-    .bar_link:hover {
-      background-color:#a00;
-    }
-    .small_header {
-      height:35px;
-      line-height:35px;
-      background-color:#811;
-      background:-webkit-linear-gradient(#933, #811);
-      background:-moz-linear-gradient(top, #822, #911);
-      color:#fff;
-      font-size:25px;
-      padding-left:5px;
-    }
-    .column { 
-      float:left;
-      height:100%;
-      margin:0;
-      padding:0;
-      border:none;
-    }
-    .portion {
-      border-radius:5px;
-      border:1px solid #000;
-      overflow:hidden;
-      width:100%;
-    }
-    .main {
-      margin-top:10px;
-      width:100%;
-    }
-    .project_list {
-      margin-right:10px;
-    }
-    .news_feed_body {
-      overflow:auto;
-      height:100%;
-    }
-    .news {
-      padding:5px;
-      border-bottom:1px solid #888;
-      overflow:hidden;
-    }
-    .news_header {
-      cursor:hand;
-      border-bottom:1px dotted #000;
-      margin-bottom:5px;
-    }
-    .news_header_big {
-      font-size:50px;
-    }
-    .news_header_timestamp {
-      font-family:monospace;
-      font-size:12px;
-      text-align:right;
-    }
-    .news_body {
-      padding-left:10px;  
-    }
-    .left {
-      margin-right:10px;
-    }
-    .github_list {
-      margin-top:10px;
-    }
-    .project {
-      padding-left:5px;
-      height:25px;
-      line-height:25px;
-      cursor:pointer;
-    }
-    .project:hover {
-      background-color:#aaa;
-    }
-    .autogen_github_repo_wrapper {
-      width:50%;
-      vertical-align:top;
-      float:left;
-    }
-    .autogen_github_repo {
-      margin-left:5px;
-      margin-right:5px;
-    }
-    .autogen_github_repo_body {
-      padding-left:15px;
-    }
-    .autogen_github_repo_name {
-      font-size:25px;
-      border-bottom:1px dotted #000;
-    }
-    .autogen_github_commit {
-      padding-top:2px;
-      padding-bottom:2px;
-      border-bottom:1px dotted #888;
-    }
-    .autogen_github_commit_meta {
-      font-size:15px;
-    }
-    .autogen_github_message {
-      font-family:monospace;
-      font-size:15px;
-    }
-    .github_link, .project_link {
-      color:inherit;
-      text-decoration:none;
-      display:block;
-    }
-  </style>
-  <script src="/jquery.min.js"></script>
-  <script src="/md5.js"></script>
-  <script>
-    function timestamp_format(epoch_time) {
-      var d = new Date(0);
-      d.setUTCSeconds(epoch_time);
-      return d.toLocaleString();
-    }
-    $(function() {
-      var head = $(".header_bar"),
-          main = $(".main"),
-          plist = $(".project_list"),
-          plist_body = $(".project_list_body"),
-          glist = $(".github_list"),
-          glist_body = $(".github_list_body"),
-          left = $(".column.left"),
-          right = $(".column.right"),
-          feed = $(".news_feed"),
-          feed_header = $(".news_feed_header"),
-          feed_body = $(".news_feed_body");
-      $(window).resize(function() {
-        var height = main.height(window.innerHeight - main.offset().top - 10).height(),
-            width = main.width(window.innerWidth - 16).width();
-        head.width(width - 4);
-        left.width((width - 14)*0.2);
-        plist.height((height - 14)*0.4);
-        glist.height((height - 14)*0.6);
-        right.width((width - 14)*0.8);
-        feed.height(height);
-        feed_body.height(height - feed_header.outerHeight());
-      }).resize();
-      var since = Math.ceil((new Date()).getTime()/1000);
-      function loadNext () { 
-        $.ajax({
-          url:"/cgi-bin/index/read_posts?last=" + since,
-          dataType:"json",
-          success:function(data) {
-            for (var i = 0; i < data.posts.length; i += 1) {
-              var news_wrapper = $(document.createElement("div")).addClass("news"),
-                  news_header = $(document.createElement("div")).addClass("news_header").append($(document.createElement("span")).addClass("news_header_big").text(data.posts[i].title)).append($(document.createElement("span")).addClass("news_header_timestamp").text(timestamp_format(data.posts[i].timestamp))),
-                  news_body = $(document.createElement("div")).addClass("news_body").html(data.posts[i].body);
-              news_header.click((function(news_body) {
-                return function() {
-                  if (news_body.css("display") === "none") {
-                    var auto_height;
-                    news_body.css("height","auto");
-                    auto_height = news_body.height();
-                    news_body.css("height","0px");
-                    news_body.css("display", "block");
-                    news_body.animate({"height":auto_height}, 400);
-                  }
-                  else {
-                    news_body.animate({"height":"0px"}, 400, function() {
-                      news_body.css("display", "none");
-                    });
-                  }
-                };
-              }(news_body)));
-              feed_body.append(news_wrapper.append(news_header).append(news_body));
-            }
-            since = data.last;
-            feed_body.scroll(function() {
-              if (feed_body[0].scrollHeight - feed_body.scrollTop() == feed_body.outerHeight()) {
-                loadNext();
-              }
-            });
-          }
-        });
+  <head>
+    <link href='http://fonts.googleapis.com/css?family=Lato:300,400' rel='stylesheet' type='text/css'>
+    <style>
+      body {
+        font-family:'Lato';
       }
-      (function() {
-        loadNext();
+      * {
+        margin:0px;
+        padding:0px;
+        overflow:hidden
+      }
+      div.blockish {
+        position:absolute;
+      }
+      div#top {
+        top:0px;
+        left:0px;
+        right:0px;
+        height:100px
+      }
+      div#header {
+        height:70px;
+        font-size:36px;
+        text-transform:uppercase;
+        line-height:70px;
+        font-weight:lighter;
+        background-color:#710001;
+        color:#F2F2FF;
+        padding-left:5px;
+      }
+      div#links {
+        border-top:1px solid #888;
+        background-color:#CCC;
+        height:30px;
+        line-height:30px;
+        font-size:14px;
+        text-transform:uppercase; /* Let's please Austin, I guess */
+        box-shadow:0px 6px 3px -3px #666 inset, 0px -6px 3px -3px #666 inset;
+      }
+      div.link {
+        display:inline-block;
+        border-right:1px solid #888;
+        padding-right:5px;
+        padding-left:5px;
+        cursor:hand;
+        transition: color 0.4s ease-in;
+      }
+      div.link:hover {
+        color:#710001;
+      }
+      div#wrapper {
+        border-top:1px solid #888;
+        top:100px;
+        left:0px;
+        right:0px;
+        bottom:0px;
+      }
+      div#left {
+        border-right:1px solid #888;
+        background-color:#F5F5F5;
+        top:0px;
+        bottom:0px;
+        left:0px;
+        width:200px;
+        overflow-y:auto;
+      }
+      div#right_header {
+        top:0px;
+        height:30px;
+        left:200px;
+        right:0px;
+      }
+      div#right_body {
+        top:30px;
+        bottom:0px;
+        left:200px;
+        right:0px;
+        overflow-y:auto;
+      }
+      div.blue_header {
+        color:#2C3E50;
+        font-size:20px;
+        height:30px;
+        line-height:30px;
+        text-transform:uppercase;
+      }
+      div.blue_subheader {
+        color:#2C3E50;
+        font-size:15px;
+        height:15px;
+        line-height:15px;
+        text-transform:uppercase;
+      }
+      div.red_header {
+        color:#710001;
+        padding-left:5px;
+        font-size:20px;
+        height:30px;
+        line-height:30px;
+        text-transform:uppercase;
+      }
+      div#left_top {
+        background-color:#FFF;
+        height:29px;
+        line-height:29px;
+        border-bottom:1px solid #888;
+      }
+      div.back_header {
+        color:#F2F2FF;
+        background-color:#710001;
+        font-size:20px;
+        height:30px;
+        line-height:30px;
+        padding-left:5px;
+        text-transform:uppercase;
+        position:fixed;
+        width:100%;
+      }
+      div.project_list {
+        padding-left:15px;
+      }
+      div.project {
+        cursor:hand;
+        color:#000;
+        transition:color 0.3s ease-in;
+      }
+      div.project:hover {
+        color:#710001;
+      }
+      div#news {
+        padding-left:10px;
+        padding-right:10px;
+        padding-top:5px;
+      }
+      div.news_post {
+        padding:10px;
+      }
+      div.news_body {
+        padding-left:10px;
+      }
+    </style>
+    <script src="/jslib/jquery.min.js"></script>
+    <script>
+      $(function() {
         $.ajax({
-          url:"/cgi-bin/index/server_projects",
+          url:"/index/news",
           dataType:"json",
           success:function(data) {
-            for (var i = 0; i < data.projects.length; i += 1) {
-              plist_body.append($("<div>").addClass("project").append($("<a>").addClass("project_link").attr("href", "/cgi-bin/" + data.projects[i]).html("&rsaquo; " + data.projects[i])));
+            var news = $("#news");
+            for (var i = 0; i < data.posts.length; i += 1) {
+              news.append($("<div>")
+                .addClass("news_post")
+                .append($("<div>").addClass("news_title").addClass("blue_header").html(data.posts[i].title))
+                .append($("<div>").addClass("news_body").html(data.posts[i].body))
+              );
             }
+          },
+          error:function(data) {
+            console.log("ERROR", data);
           }
         });
-        $.ajax({
-          url:"/projects.json",
-          dataType:"json",
-          success:function(data) {
-            for (var i = 0; i < data.projects.length; i += 1) {
-              glist_body.append($("<div>").addClass("project").append($("<a>").addClass("github_link").attr("href", data.projects[i].url).html("&rsaquo; " + data.projects[i].name)));
-            }
-          }
-        });
-        feed_body.scroll(function() {
-          if (feed_body[0].scrollHeight - feed_body.scrollTop() == feed_body.outerHeight()) {
-            loadNext();
-            feed_body.unbind("scroll");
-          }
-        });
-      }());
-    });
-  </script>
-</head>
-<body>
-  <div class="header_bar">
-    <div class="big_header">Exeter Computing Club</div>
-    <div class="link_bar">
-      <a class="bar_link" href="http://csserver.exeter.edu/moodle">moodle</a>
-      <a class="bar_link" href="http://github.com/Exeter">github</a>
-      <a class="bar_link" href="https://docs.google.com/forms/d/1sxdIJS8v9Jb4MZCRhCoZI2UdW_1haAAQrmpvw6Sg8iA/viewform">request</a>
-      <a class="bar_link" href="/cgi-bin/ideas/server/">idea</a>
-      <a class="bar_link" href="/about.html">about</a>
-      <a class="bar_link" href="/bios.html">us</a>
+      });
+    </script>
+  </head>
+  <body>
+  <div id="top" class="blockish">
+    <div id="header">
+      Exeter Computing Club
     </div>
-  </div>
-  <div class="main">
-    <div class="column left">
-      <div class="project_list portion">
-        <div class="small_header">
-          Server Projects
-        </div>
-        <div class="project_list_body">
-        </div>
+    <div id="links">
+      <div class="link">
+        <a>login</a>
       </div>
-      <div class="github_list portion">
-        <div class="small_header">
-          Github Projects
-        </div>
-        <div class="github_list_body">
-        </div>
+      <div class="link">
+        <a>about</a>
       </div>
-    </div>
-    <div class="column right">
-      <div class="news_feed portion">
-        <div class="small_header news_feed_header">
-          Club News
-          <a class="bar_link publish" href="/publish.html">+</a>
-        </div>
-        <div class="news_feed_body">
-        </div>
+      <div class="link">
+        <a>github</a>
+      </div>
+      <div class="link">
+        <a>moodle</a>
       </div>
     </div>
   </div>
-</body>
+  <div id="wrapper" class="blockish">
+    <div id="left" class="blockish">
+      <div class="red_header" id="left_top">
+        Projects
+      </div>
+      <div class="red_header">
+        Github
+      </div>
+      <div id="github" class="project_list">
+        <div class="project">
+          <a>Project 1<a>
+        </div>
+        <div class="project">
+          <a>Project 2<a>
+        </div>
+        <div class="project">
+          <a>Project 3<a>
+        </div>
+      </div>
+      <div class="red_header">
+        This Server
+      </div>
+    </div>
+    <div id="right_header" class="blockish">
+      <div class="back_header">
+        Club News
+      </div>
+    </div>
+    <div id="right_body" class="blockish">
+      <div id="news">
+      </div>
+    </div>
+  </div>
+  </body>
 </html>

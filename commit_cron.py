@@ -1,56 +1,61 @@
 #!/usr/bin/env python
-import http.client
+import httplib
 import simplejson
 import datetime
 import dateutil.parser
 import sqlite3
+import time
+from templet import stringfunction
 
+@stringfunction
+def format_commit(commit):
+  """
+    <div class="ag_commit">
+      <div class="ag_commit_message">
+        <a href=${commit["link"]}>${commit["message"]}</a>
+      </div>
+      <div class="ag_commit_meta">
+        <a class="ag_commit_committer" href="${commit["user_link"]}">${commit["committer"]}</a>
+        <span class="ag_commit_timestamp">${commit["timestamp"]}</span>
+      </div>
+    </div>
+  """
+
+@stringfunction
+def format_repo(repo):
+  """
+    <div class="ag_repo">
+      <div class="blue_subheader ag_repo_name">${repo["name"]}</div>
+      <div class="ag_repo_body">
+        ${[format_commit(commit) for commit in repo["commits"]]}
+      </div>
+    </div>
+  """
+
+@stringfunction
 def format_post(data):
-  formatted = ""
-  for key in data:
-    if (len(data[key]) > 0):
-      formatted += """
-        <div class="autogen_github_repo_wrapper">
-          <div class="autogen_github_repo">
-            <div class="autogen_github_repo_name">
-              Updates to "%s"
-            </div>
-            <div class="autogen_github_repo_body">
-      """ % key
-      for commit in data[key]:
-        formatted += """
-            <div class="autogen_github_commit">
-              <div class="autogen_github_message">
-                %s
-              </div>
-              <div class="autogen_github_commit_meta">
-                <a href="%s" class="autogen_github_committer">%s</a>
-                <a href="%s" class="autogen_github_timestamp">%s</a>
-              </div>
-            </div>
-        """ % (commit["message"], commit["user_link"], commit["committer"], commit["link"], commit["timestamp"])
-      formatted += "</div></div></div>"
-  if (len(formatted) > 0):
-    return formatted
-  else:
-    return False
+  """
+    <div class="ag">
+      ${[format_repo(repo) for repo in data]}
+    </div>
+  """
 
-def main():
+if __name__ == "__main__":
   projects = simplejson.load(open("/srv/http/projects.json"))["projects"]
   since = simplejson.load(open("/srv/http/commit.json"))["since"]
   new_since = since
 
-  final = {}
-
+  final = []
+  
   for repository in projects:
     print (repository)
     commit_list = []
-    request = http.client.HTTPSConnection("api.github.com");
+    request = httplib.HTTPSConnection("api.github.com");
     request.putrequest("GET",("/repos/Exeter/%s/commits" % repository["name"]) + 
                     "?client_id=a951833eb1496c8c32ef" +
                     "&client_secret=f338d8a20721decdae676e58c69a127aafdadafc"+
                     ("&since=%s" % since));
-    request.putheader("User-Agent", "Exeter Computing Club Server")
+    request.putheader("User-Agent", "dabbler0")
     request.endheaders()
     loaded = simplejson.loads(request.getresponse().read());
     for commit in loaded:
@@ -63,15 +68,16 @@ def main():
       })
       if commit["commit"]["committer"]["date"] > new_since:
          new_since = commit["commit"]["committer"]["date"]
-    final[repository["name"]] = commit_list
-
-  xml = format_post(final)
-  if (xml != False):
-    conn = sqlite3.connect("/srv/http/cgi-bin/index/news.db")
+    final.append({
+      "name": repository["name"],
+      "commits": commit_list
+    })
+  if len(final) > 0:
+    conn = sqlite3.connect("/home/anthony/Projects/new_ecc/news.db")
     cur = conn.cursor()
-    cur.execute("INSERT INTO news (timestamp, title, body) VALUES ((JULIANDAY('now') - 2440587.5)*86400.0, 'Automatic Github Updates', ?)", (xml,))
+    cur.execute("INSERT INTO news (timestamp, title, body) VALUES (?, 'Github Commits %s', ?)" % time.strftime("%b %d"), (time.time(), format_post(final)))
     conn.commit()
     conn.close()
-    open("/srv/http/commit.json","w").write(simplejson.dumps({"since":(dateutil.parser.parse(new_since) + datetime.timedelta(0,1)).isoformat()[:20]}))
-
-main()
+    record = open("/srv/http/commit.json","w")
+    record.write(simplejson.dumps({"since":(dateutil.parser.parse(new_since) + datetime.timedelta(0,1)).isoformat()[:20]}))
+    record.close()
