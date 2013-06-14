@@ -65,9 +65,12 @@ struct hit_list_node {
   hit_list_node* next;
 };
 
-int hash(const char* string) {
+int hash(const char* string, int modulo) {
   int r = 0;
-  for (int i = 0; string[i] != '\0'; ++i) r = r * 31 + string[i];
+  for (int i = 0; string[i] != '\0'; ++i) {
+    fprintf(DEBUG, "Hash value is now %d.\n", r);
+    r = (r * 31 + string[i]) % modulo;
+  }
   return r;
 }
 
@@ -108,7 +111,7 @@ static int hit_list_increment(hit_list* map, const char* key, int clear_freq) {
   }
 
   int incorrect = 0, index;
-  hit_list_node* head = map->buckets[(index = hash(key) % map->size)];
+  hit_list_node* head = map->buckets[(index = hash(key, map->size))];
 
   //If there is nothing in this bucket yet, put something there:
   if (head == 0) {
@@ -208,7 +211,7 @@ static void hashmap_clear(hashmap* map) {
 }
 
 static int hashmap_contains(hashmap* map, char* key) {
-  hashmap_node* head = map->buckets[hash(key) % map->size];
+  hashmap_node* head = map->buckets[hash(key, map->size)];
   while (head != NULL) {
     if (strcmp(head->key, key) == 0) return 1;
     head = head->next;
@@ -221,7 +224,7 @@ static void* hashmap_get(hashmap* map, const char* key) {
   fputs("Starting hashmap_get.\n", DEBUG);
   fflush(DEBUG);
 #endif
-  hashmap_node* head = map->buckets[hash(key) % map->size];
+  hashmap_node* head = map->buckets[hash(key, map->size)];
   while (head != NULL && strcmp(head->key, key)) head = head->next;
 #ifdef MANIFEST_DEBUG_MODE
   fputs("Found the proper head value.\n", DEBUG);
@@ -243,7 +246,7 @@ static void hashmap_set(hashmap* map, const char* key, void* value) {
   fflush(DEBUG);
 #endif
   int index, incorrect = 1;
-  hashmap_node* head = map->buckets[(index = hash(key) % map->size)];
+  hashmap_node* head = map->buckets[(index = hash(key, map->size))];
   if (head != NULL) while (head->next != NULL && (incorrect = strcmp(head->key, key))) head = head->next;
   if (incorrect) {
     //Create and a new node.
@@ -545,7 +548,7 @@ static int run_dynamic(request_rec* r, const char* file) {
     //If we don't get to the end of the headers, say so:
     if (!headers_ended_properly) {
 #ifdef MANIFEST_DEBUG_MODE
-      fputs("End of script before headers.", DEBUG);
+      fputs("End of script before headers.\n", DEBUG);
       fflush(DEBUG);
 #endif
       return HTTP_INTERNAL_SERVER_ERROR;
@@ -659,7 +662,7 @@ static int run_static(request_rec* r, const char* filename) {
     finfo->size = size;
     finfo->mimetype = strdup(mimetype);
 #ifdef MANIFEST_DEBUG_MODE
-    fprintf("Storing as mimetype %s.\n", finfo->mimetype);
+    fprintf(DEBUG, "Storing as mimetype %s.\n", finfo->mimetype);
 #endif
     hashmap_set(file_ptr_cache, filename, finfo);
   }
@@ -702,7 +705,7 @@ int matches(regmatch_t** backrefs, char* form, char* path, char* match) {
 
   //Make our backrefs array
   *backrefs = (regmatch_t*) malloc ((nbackrefs + 1) * sizeof(regmatch_t));
-  
+
   int rc;
   char tmatch[strlen(match) + 1];
   sprintf(tmatch, "^%s$", match); //Enforce a match of the entire string
@@ -771,31 +774,36 @@ static int run_manifest(request_rec* r, const char* filename) {
 
     //Set up our marker:
     int i = 0;
-
+    
+    fputs("Set up the marker\n", DEBUG);
     //Get the path descriptor:
     char match[PATH_DESCRIPTOR_LENGTH];
-    for (; line[i] != ' ' && line[i] != '\n'; ++i) match[i] = line[i];
+    for (; line[i] != ' ' && line[i] != '\n'; ++i) {
+      match[i] = line[i];
+    }
     match[i] = '\0';
 
     //If we have a misformatted line, say so:
     if (line[i] == '\0') return HTTP_INTERNAL_SERVER_ERROR;
-
+  
     //Advance past the space:
     ++i;
-    
+
     //Declare stuff
     int s = 0;
     regmatch_t* backref;
     char* new_file;
-
+    
     //Assemble the format string:
     char form[100];
-    for (; line[i] != ' ' && line[i] != '\0'; ++i & ++s) form[s] = line[i];
+    for (; line[i] != ' ' && line[i] != '\0'; ++i & ++s) {
+      form[s] = line[i];
+    }
     form[s] = '\0';
 
     //Again, if the line is misformatted, say so:
     if (line == '\0') return HTTP_INTERNAL_SERVER_ERROR;
-
+    
     //Check if we match
     if (matches(&backref, form, r->uri, match)) {
       //If we do, format our path
@@ -840,7 +848,7 @@ static int run_manifest(request_rec* r, const char* filename) {
     return rc;
   }
   
-  //If there is no such manifest line, says so:
+  //If there is no such manifest line, say so:
   return HTTP_NOT_FOUND;
 }
 
@@ -890,8 +898,8 @@ static int manifester(request_rec* r) {
   }
 #ifdef MANIFEST_DEBUG_MODE 
   fputs("Benign requester.\n", DEBUG);
-#endif
   fflush(DEBUG);
+#endif
 
   //REQUEST HANDLING STEP 2: CHECK CACHE HIT
   manifest_command* cached_command;
@@ -899,8 +907,8 @@ static int manifester(request_rec* r) {
 
 #ifdef MANIFEST_DEBUG_MODE
   fputs("No cache hit.\n", DEBUG);
-#endif
   fflush(DEBUG);
+#endif
 
   //REQUEST HANDLING STEP 3: RUN MANIFEST FILE
   return run_manifest(r, "/srv/http/manifest.txt");

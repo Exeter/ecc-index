@@ -7,9 +7,8 @@ import time
 
 if __name__ == "__main__":
   #Parse the url we just got
-  urlpath = urlparse.urlparse(os.environ["PATH_INFO"])
-  path = urlpath.path.split("/")
-  qwargs = urlparse.parse_qs(urlpath.query)
+  path = os.environ["PATH_INFO"].split("/")
+  qwargs = urlparse.parse_qs(os.environ["QUERY_STRING"])
   
   #Enforce one value per query string argument
   for key in qwargs:
@@ -17,7 +16,8 @@ if __name__ == "__main__":
 
   conn = sqlite3.connect("/home/anthony/Projects/new_ecc/news.db")
   c = conn.cursor()
-  
+  virtual_last = int(qwargs["last"] if "last" in qwargs else time.time())
+
   #Make sure that this table exists
   c.execute("""
     CREATE TABLE IF NOT EXISTS news (id INTEGER PRIMARY KEY ASC, title TEXT, body TEXT, timestamp INTEGER)
@@ -25,12 +25,12 @@ if __name__ == "__main__":
 
   c.execute("""
     SELECT * FROM news WHERE timestamp<? ORDER BY timestamp DESC LIMIT 10
-  """, (int(qwargs["last"] if "last" in qwargs else time.time()),)) #If there is no "last" argument, default to lastest
-
+  """, (virtual_last,)) #If there is no "last" argument, default to latest
+  
   results = c.fetchall()
   posts = {
     "posts": [],
-    "last": time.time()
+    "last": virtual_last
   }
   for row in results:
     posts["posts"].append({

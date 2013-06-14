@@ -16,7 +16,7 @@ def format_commit(commit):
       </div>
       <div class="ag_commit_meta">
         <a class="ag_commit_committer" href="${commit["user_link"]}">${commit["committer"]}</a>
-        <span class="ag_commit_timestamp">${commit["timestamp"]}</span>
+        <span class="ag_commit_timestamp">${datetime.datetime.strptime(commit["timestamp"], "%Y-%m-%dT%H:%M:%SZ").strftime("%I:%M %p")}</span>
       </div>
     </div>
   """
@@ -68,10 +68,11 @@ if __name__ == "__main__":
       })
       if commit["commit"]["committer"]["date"] > new_since:
          new_since = commit["commit"]["committer"]["date"]
-    final.append({
-      "name": repository["name"],
-      "commits": commit_list
-    })
+    if len(commit_list) > 0:
+      final.append({
+        "name": repository["name"],
+        "commits": commit_list
+      })
   if len(final) > 0:
     conn = sqlite3.connect("/home/anthony/Projects/new_ecc/news.db")
     cur = conn.cursor()

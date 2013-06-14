@@ -1,163 +1,77 @@
+<!DOCTYPE html>
 <html>
+  <!--
+    Copyright (c) 2013 Phillips Exeter Academy Computing Club
+    Created by Anthony Bau in 2013
+    
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright and creation notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+  -->
   <head>
-    <link href='http://fonts.googleapis.com/css?family=Lato:300,400' rel='stylesheet' type='text/css'>
-    <style>
-      body {
-        font-family:'Lato';
-      }
-      * {
-        margin:0px;
-        padding:0px;
-        overflow:hidden
-      }
-      div.blockish {
-        position:absolute;
-      }
-      div#top {
-        top:0px;
-        left:0px;
-        right:0px;
-        height:100px
-      }
-      div#header {
-        height:70px;
-        font-size:36px;
-        text-transform:uppercase;
-        line-height:70px;
-        font-weight:lighter;
-        background-color:#710001;
-        color:#F2F2FF;
-        padding-left:5px;
-      }
-      div#links {
-        border-top:1px solid #888;
-        background-color:#CCC;
-        height:30px;
-        line-height:30px;
-        font-size:14px;
-        text-transform:uppercase; /* Let's please Austin, I guess */
-        box-shadow:0px 6px 3px -3px #666 inset, 0px -6px 3px -3px #666 inset;
-      }
-      div.link {
-        display:inline-block;
-        border-right:1px solid #888;
-        padding-right:5px;
-        padding-left:5px;
-        cursor:hand;
-        transition: color 0.4s ease-in;
-      }
-      div.link:hover {
-        color:#710001;
-      }
-      div#wrapper {
-        border-top:1px solid #888;
-        top:100px;
-        left:0px;
-        right:0px;
-        bottom:0px;
-      }
-      div#left {
-        border-right:1px solid #888;
-        background-color:#F5F5F5;
-        top:0px;
-        bottom:0px;
-        left:0px;
-        width:200px;
-        overflow-y:auto;
-      }
-      div#right_header {
-        top:0px;
-        height:30px;
-        left:200px;
-        right:0px;
-      }
-      div#right_body {
-        top:30px;
-        bottom:0px;
-        left:200px;
-        right:0px;
-        overflow-y:auto;
-      }
-      div.blue_header {
-        color:#2C3E50;
-        font-size:20px;
-        height:30px;
-        line-height:30px;
-        text-transform:uppercase;
-      }
-      div.blue_subheader {
-        color:#2C3E50;
-        font-size:15px;
-        height:15px;
-        line-height:15px;
-        text-transform:uppercase;
-      }
-      div.red_header {
-        color:#710001;
-        padding-left:5px;
-        font-size:20px;
-        height:30px;
-        line-height:30px;
-        text-transform:uppercase;
-      }
-      div#left_top {
-        background-color:#FFF;
-        height:29px;
-        line-height:29px;
-        border-bottom:1px solid #888;
-      }
-      div.back_header {
-        color:#F2F2FF;
-        background-color:#710001;
-        font-size:20px;
-        height:30px;
-        line-height:30px;
-        padding-left:5px;
-        text-transform:uppercase;
-        position:fixed;
-        width:100%;
-      }
-      div.project_list {
-        padding-left:15px;
-      }
-      div.project {
-        cursor:hand;
-        color:#000;
-        transition:color 0.3s ease-in;
-      }
-      div.project:hover {
-        color:#710001;
-      }
-      div#news {
-        padding-left:10px;
-        padding-right:10px;
-        padding-top:5px;
-      }
-      div.news_post {
-        padding:10px;
-      }
-      div.news_body {
-        padding-left:10px;
-      }
-    </style>
+    <link href='http://fonts.googleapis.com/css?family=Lato:300,400' rel='stylesheet' type='text/css'/>
+    <link href="/index/style.css" rel="stylesheet" type="text/css"/>
     <script src="/jslib/jquery.min.js"></script>
     <script>
       $(function() {
+        var last;
+        function loadMorePosts() {
+          $.ajax({
+            url:"/index/news",
+            dataType:"json",
+            data: (last ? {
+              "last": last
+            } : {}),
+            success:function(data) {
+              var news = $("#news");
+              for (var i = 0; i < data.posts.length; i += 1) {
+                news.append($("<div>")
+                  .addClass("news_post")
+                  .append($("<label>")
+                    .attr("for", "invisible_checkbox_" + i)
+                    .addClass("invisible_checkbox_label")
+                    .append($("<div>").addClass("news_title").addClass("blue_header").html(data.posts[i].title))
+                  )
+                  .append($("<input>").attr("id", "invisible_checkbox_" + i).attr("type", "checkbox").addClass("invisible_checkbox"))
+                  .append($("<div>").addClass("news_body").html(data.posts[i].body))
+                );
+              }
+              last = data.last;
+            },
+            error:function(data) {
+              $("#news").append("<div class=\"error_message\">There was an error loading news posts.</div>");
+            }
+          });
+        }
+        loadMorePosts();
+        $("#right_body").scroll(function() {
+          if ($(this).scrollTop() >= $("#news").height() - $(this).height() - 50) {
+            loadMorePosts();
+          }
+        });
+
         $.ajax({
-          url:"/index/news",
+          url:"/index/projects",
           dataType:"json",
           success:function(data) {
-            var news = $("#news");
-            for (var i = 0; i < data.posts.length; i += 1) {
-              news.append($("<div>")
-                .addClass("news_post")
-                .append($("<div>").addClass("news_title").addClass("blue_header").html(data.posts[i].title))
-                .append($("<div>").addClass("news_body").html(data.posts[i].body))
-              );
+            var github = $("#github");
+            for (var i =0; i < data.projects.length; i += 1) {
+              github.append($("<div>").addClass("project").append($("<a>").attr("href", data.projects[i].url).text(data.projects[i].name)))
             }
-          },
-          error:function(data) {
-            console.log("ERROR", data);
           }
         });
       });
@@ -166,17 +80,17 @@
   <body>
   <div id="top" class="blockish">
     <div id="header">
-      Exeter Computing Club
+      <a href="/index.html">Exeter Computing Club</a>
     </div>
     <div id="links">
       <div class="link">
-        <a>login</a>
+        <a href="/login.html">login</a>
       </div>
       <div class="link">
-        <a>about</a>
+        <a href="/about.html">about</a>
       </div>
       <div class="link">
-        <a>github</a>
+        <a href="https://github.com/Exeter">github</a>
       </div>
       <div class="link">
         <a>moodle</a>
@@ -184,23 +98,14 @@
     </div>
   </div>
   <div id="wrapper" class="blockish">
-    <div id="left" class="blockish">
-      <div class="red_header" id="left_top">
-        Projects
-      </div>
+    <div id="left_header" class="blockish">
+      Projects
+    </div>
+    <div id="left_body" class="blockish">
       <div class="red_header">
         Github
       </div>
       <div id="github" class="project_list">
-        <div class="project">
-          <a>Project 1<a>
-        </div>
-        <div class="project">
-          <a>Project 2<a>
-        </div>
-        <div class="project">
-          <a>Project 3<a>
-        </div>
       </div>
       <div class="red_header">
         This Server
