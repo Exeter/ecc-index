@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <regex.h>
+#include <ctype.h>
 #include "ap_config.h"
 #include "ap_provider.h"
 #include "httpd.h"
@@ -17,9 +18,11 @@
 #define DAMN_ABUSERS
 
 #define LINE_CACHE_BUCKET_SIZE 37
-#define LINE_CACHE_CLEAR_FREQ 3600
+//#define LINE_CACHE_CLEAR_FREQ 3600
+#define LINE_CACHE_CLEAR_FREQ 30 //DEBUGGING
 #define LINE_CACHE_THRESHOLD 300
-#define STATIC_FILE_CLEAR_FREQ 3600
+//#define STATIC_FILE_CLEAR_FREQ 3600
+#define STATIC_FILE_CLEAR_FREQ 30 //DEBUGGING
 #define FILE_TOTAL_CACHE_THRESHOLD 200
 #define FILE_PTR_CACHE_THRESHOLD 50
 #define BLOCK_SIZE 100
@@ -27,12 +30,15 @@
 #define FORMAT_RESULT_SIZE 1000
 #define PATH_DESCRIPTOR_LENGTH 500
 #define BLACKLIST_THRESHOLD 720
-#define BLACKLIST_CLEAR_FREQUENCY 3600
+//#define BLACKLIST_CLEAR_FREQUENCY 3600
+#define BLACKLIST_CLEAR_FREQUENCY 30 //DEBUGGING
 #define DEFAULT_DOS_BUCKET_SIZE 30
 
 /*
   Copyright (c) 2013 Anthony Bau and Exeter Computing Club.
 */
+
+FILE* DEBEST;
 
 //Debugging file:
 FILE* DEBUG;
@@ -68,7 +74,6 @@ struct hit_list_node {
 int hash(const char* string, int modulo) {
   int r = 0;
   for (int i = 0; string[i] != '\0'; ++i) {
-    fprintf(DEBUG, "Hash value is now %d.\n", r);
     r = (r * 31 + string[i]) % modulo;
   }
   return r;
@@ -78,11 +83,12 @@ typedef struct {
   hit_list_node** buckets;
   int size;
   time_t last_cleared;
+  FILE* dump;
 } hit_list;
 
 static void hit_list_clear(hit_list* map) {
 #ifdef MANIFEST_DEBUG_MODE
-  fputs("Clearing a map.\n", DEBUG);
+  fputs("Clearing a hit list.\n", DEBUG);
   fflush(DEBUG);
 #endif
 
@@ -93,12 +99,31 @@ static void hit_list_clear(hit_list* map) {
     else {
       //Free every element here:
       hit_list_node* foot = head->next;
-      while (foot != NULL) {
+      do {
+        if (map->dump) {
+#ifdef MANIFEST_DEBUG_MODE
+          fprintf(DEBUG, "Printing:\n%s %d\nto %p\n", head->key, head->value, map->dump);
+          fflush(DEBUG);
+#endif
+          fprintf(map->dump, "%s %d\n", head->key, head->value);
+          fflush(map->dump);
+        }
+        else {
+#ifdef MANIFEST_DEBUG_MODE
+          fputs("No map->dump... so, I guess there's nothing to do.\n", DEBUG);
+          fflush(DEBUG);
+#endif
+        }
         free(head->key);
         free(head);
-        head = foot;
-        foot = head->next;
-      }
+        if (foot) {
+          head = foot;
+          foot = head->next;
+        }
+      } while (foot != NULL);
+      
+      //Empty this bucket.
+      map->buckets[i] = NULL;
     }
   }
 }
@@ -107,7 +132,7 @@ static int hit_list_increment(hit_list* map, const char* key, int clear_freq) {
   //If it's time to refresh, do so and automatically clear this requester:
   if (difftime(time(NULL), map->last_cleared) > clear_freq) {
     hit_list_clear(map);
-    return 0;
+    return 1;
   }
 
   int incorrect = 0, index;
@@ -491,16 +516,30 @@ static int run_dynamic(request_rec* r, const char* file) {
       //Write it to the child:
       if (write(stdin_pipe[1], buf, (size_t) size) < 0) return HTTP_INTERNAL_SERVER_ERROR;
     }
-
+    
     //Wait for the child to finish:
     waitpid(pid, &status, 0);
+
+#ifdef MANIFEST_DEBUG_MODE
+    fputs("Child finished execution\n", DEBUG);
+    fflush(DEBUG);
+#endif
 
     //Parse headers:
     char c, l;
     char header_name[100];
     char header_value[100];
-    int modifying_header_name = 1, after_colon = 0, after_newline = 0, headers_ended_properly = 0, s = 0;
+#ifdef MANIFEST_DEBUG_MODE
+    char error_message[3000];
+#endif
+    int modifying_header_name = 1, after_colon = 0, after_newline = 0, headers_ended_properly = 0, s = 0, ei = 0;
     while (read(stdout_pipe[0], &c, 1) > 0) {
+#ifdef MANIFEST_DEBUG_MODE
+      //Record the output in case we need to log what the result was in case of header failure
+      putc(c, DEBUG);
+      error_message[ei] = c;
+      ++ei;
+#endif
       if (after_colon) {
         //Skip the whitespace after colons.
         if (c == ' ' || c == '\t') continue;
@@ -544,11 +583,24 @@ static int run_dynamic(request_rec* r, const char* file) {
       //Unset the newline flag if we're not after a newline:
       if (c != '\n') after_newline = 0;
     }
+    
+#ifdef MANIFEST_DEBUG_MODE
+    //Finalize the error message
+    error_message[ei] = '\0';
+#endif
 
     //If we don't get to the end of the headers, say so:
     if (!headers_ended_properly) {
 #ifdef MANIFEST_DEBUG_MODE
       fputs("End of script before headers.\n", DEBUG);
+      fprintf(DEBUG, "Output:\n%s\n", error_message);
+      fflush(DEBUG);
+
+      fputs("STDERR output:\n", DEBUG);
+      while (read(stderr_pipe[0], &c, 1) > 0) {
+        fputc(c, DEBUG);
+      }
+      fputc('\n', DEBUG);
       fflush(DEBUG);
 #endif
       return HTTP_INTERNAL_SERVER_ERROR;
@@ -690,14 +742,9 @@ int matches(regmatch_t** backrefs, char* form, char* path, char* match) {
   //Count the number of backreferences needed
   int nbackrefs = 0;
   for (int i = 0; form[i] != '\0'; ++i) {
-    if (form[i] == '$') {
-      char n[3];
-      ++i;
-      for (int s = 0; form[i] != '$'; ++i & ++s) n[s] = form[i];
-      ++i;
-      n[i] = '\0';
+    if (form[i] == '\\' && isdigit(form[i + 1])) {
       int m;
-      if ((m = atoi(n)) > nbackrefs) {
+      if ((m = form[i] - '0') > nbackrefs) {
         nbackrefs = m;
       }
     }
@@ -724,24 +771,20 @@ const char* format(regmatch_t* backref, char* format, char* path) {
   int mark = 0;
 
   for (int i = 0; format[i] != '\0'; ++i & ++mark) {
-    if (format[i] == '$') {
+    if (format[i] == '\\' && isdigit(format[i + 1])) {
       //Get the requested backref index:
-      
-      char n[3];
-      ++i;
-      for (int s = 0; format[i] != '$'; ++i & ++s) n[s] = format[i];
-      ++i;
-      n[i] = '\0';
-
-      int which = atoi(n);
+      int which = format[i + 1] - '0';
       char* beg_ptr = path + backref[which].rm_so;
       int size = backref[which].rm_eo - backref[which].rm_so;
-      
+
+      fprintf(DEBUG, "Accessing backref %d.\n", which);
+      fflush(DEBUG);
+
       //Get the request backref index:
       memcpy(result + mark, beg_ptr, size);
       mark += backref[which].rm_eo - backref[which].rm_so;
-      
-      //Skip the following dollar sign.
+
+      //Skip the backref index characer
       ++i;
     }
     else {
@@ -775,7 +818,6 @@ static int run_manifest(request_rec* r, const char* filename) {
     //Set up our marker:
     int i = 0;
     
-    fputs("Set up the marker\n", DEBUG);
     //Get the path descriptor:
     char match[PATH_DESCRIPTOR_LENGTH];
     for (; line[i] != ' ' && line[i] != '\n'; ++i) {
@@ -823,7 +865,7 @@ static int run_manifest(request_rec* r, const char* filename) {
         break;
       case 'D':
         //Cache this line:
-        if (!hashmap_contains(line_cache, r->uri) && hit_list_increment(line_cache_record, r->uri, LINE_CACHE_CLEAR_FREQ)) {
+        if (hit_list_increment(line_cache_record, r->uri, LINE_CACHE_CLEAR_FREQ) > LINE_CACHE_THRESHOLD && !hashmap_contains(line_cache, r->uri)) {
           manifest_command* cached_command = (manifest_command*) malloc (sizeof(manifest_command));
           cached_command->disposition = 1;
           cached_command->file = strdup(new_file);
@@ -833,7 +875,7 @@ static int run_manifest(request_rec* r, const char* filename) {
         break;
       default:
         //Cache this line:
-        if (!hashmap_contains(line_cache, r->uri) && hit_list_increment(line_cache_record, r->uri, LINE_CACHE_CLEAR_FREQ)) {
+        if (hit_list_increment(line_cache_record, r->uri, LINE_CACHE_CLEAR_FREQ) > LINE_CACHE_THRESHOLD && !hashmap_contains(line_cache, r->uri)) {
           manifest_command* cached_command = (manifest_command*) malloc (sizeof(manifest_command));
           cached_command->disposition = 0;
           cached_command->file = strdup(new_file);
@@ -852,11 +894,12 @@ static int run_manifest(request_rec* r, const char* filename) {
   return HTTP_NOT_FOUND;
 }
 
-hit_list* create_hit_list(int size) {
+hit_list* create_hit_list(int size, FILE* dump) {
   hit_list* new_hit_list = (hit_list *) malloc (sizeof(hit_list));
   new_hit_list->buckets = (hit_list_node **) calloc (DEFAULT_DOS_BUCKET_SIZE, sizeof(hit_list_node*));
   new_hit_list->size = DEFAULT_DOS_BUCKET_SIZE;
   new_hit_list->last_cleared = time(NULL);
+  new_hit_list->dump = dump;
   return new_hit_list;
 }
 
@@ -866,19 +909,6 @@ hashmap* create_hashmap(int size) {
   new_hashmap->size = size;
   new_hashmap->last_cleared = time(NULL);
   return new_hashmap;
-}
-
-static void* setup_req_densities(apr_pool_t *p, server_rec *s) {
-  
-  //Create the hit lists
-  server_hit_list = create_hit_list(DEFAULT_DOS_BUCKET_SIZE);
-  line_cache_record = create_hit_list(DEFAULT_DOS_BUCKET_SIZE);
-  file_access_record = create_hit_list(DEFAULT_DOS_BUCKET_SIZE);
-  
-  //Create the caches
-  line_cache = create_hashmap(LINE_CACHE_BUCKET_SIZE);
-  file_ptr_cache = create_hashmap(LINE_CACHE_BUCKET_SIZE);
-  file_text_cache = create_hashmap(LINE_CACHE_BUCKET_SIZE);
 }
 
 /*=================
@@ -903,7 +933,10 @@ static int manifester(request_rec* r) {
 
   //REQUEST HANDLING STEP 2: CHECK CACHE HIT
   manifest_command* cached_command;
-  if ((cached_command = (manifest_command*) hashmap_get(line_cache, r->uri)) != NULL) return (cached_command->disposition == 0 ? run_static(r, cached_command->file) : (cached_command->disposition == 1 ? run_dynamic(r, cached_command->file) : HTTP_INTERNAL_SERVER_ERROR));
+  if ((cached_command = (manifest_command*) hashmap_get(line_cache, r->uri)) != NULL) {
+    hit_list_increment(line_cache_record, r->uri, LINE_CACHE_CLEAR_FREQ); //Increase for record-keeping purposes
+    return (cached_command->disposition == 0 ? run_static(r, cached_command->file) : (cached_command->disposition == 1 ? run_dynamic(r, cached_command->file) : HTTP_INTERNAL_SERVER_ERROR));
+  }
 
 #ifdef MANIFEST_DEBUG_MODE
   fputs("No cache hit.\n", DEBUG);
@@ -914,10 +947,21 @@ static int manifester(request_rec* r) {
   return run_manifest(r, "/srv/http/manifest.txt");
 }
 
-static void register_hooks(apr_pool_t* pool) {
+static void register_hooks(apr_pool_t* pool) { 
+
 #ifdef MANIFEST_DEBUG_MODE
   DEBUG = fopen("/srv/http/logs/manifester.debug", "w");
 #endif
+
+  //Create the hit lists
+  server_hit_list = create_hit_list(DEFAULT_DOS_BUCKET_SIZE, fopen("/srv/http/logs/access.dump", "w"));
+  line_cache_record = create_hit_list(DEFAULT_DOS_BUCKET_SIZE, fopen("/srv/http/logs/url.dump", "w"));
+  file_access_record = create_hit_list(DEFAULT_DOS_BUCKET_SIZE, fopen("/srv/http/logs/file.dump", "w"));
+  
+  //Create the caches
+  line_cache = create_hashmap(LINE_CACHE_BUCKET_SIZE);
+  file_ptr_cache = create_hashmap(LINE_CACHE_BUCKET_SIZE);
+  file_text_cache = create_hashmap(LINE_CACHE_BUCKET_SIZE);
 
 #ifdef DAMN_ABUSERS
   LOG_OF_DAMNATION = fopen("/srv/http/logs/damnation.log", "w");
@@ -929,7 +973,7 @@ module AP_MODULE_DECLARE_DATA manifester_module = {
   STANDARD20_MODULE_STUFF,
   NULL,
   NULL,
-  setup_req_densities,
+  NULL,
   NULL,
   NULL,
   register_hooks
