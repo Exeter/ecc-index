@@ -1,0 +1,62 @@
+#!/usr/bin/env python
+import httplib
+import urlparse
+import os
+import auth
+import sqlite3
+import simplejson as json
+
+if __name__ == "__main__":
+  # Declare our content-type
+  print "Content-Type: application/json"
+  print ""
+
+  # Parse the path and query string arguments
+  path = os.environ["PATH_INFO"].split("/")
+  qwargs = urlparse.parse_qs(os.environ["QUERY_STRING"])
+
+  # Enforce one value per query string argument
+  for key in qwargs:
+    qwargs[key] = qwargs[key][0]
+
+  # Connect to the projects database
+  conn = sqlite3.connect("/home/anthony/ecc-index/db/projects.db")
+  c = conn.cursor()
+
+  # Make sure that the projects table exists
+  c.execute("""
+    CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY ASC, name TEXT, team TEXT, github TEXT, updated TEXT)
+  """)
+  
+  kconn = auth.initDB("/home/anthony/ecc-index/db/users.db")
+
+  # Get the row that w want
+  c.execute("""
+    SELECT * FROM projects WHERE name=?
+  """, (qwargs["project"],))
+   
+  row = c.fetchone()
+  if row is None:
+    print json.dumps({
+      "error": "NO SUCH PROJECT"
+    })
+  else:
+    team = json.loads(row[2])
+    info = {} # This will be the actual info that's returned to the client
+    # Make sure that this user is actually on the project team
+    if not qwargs["uname"] in team:
+      print json.dumps({
+        "error": "NOT ON TEAM"
+      })
+    
+    # See if github is better than us
+    request = httplib.HTTPSConnection("api.github.com")
+    request.putrequest("GET", row[3])
+    request.putheader("User-Agent", "dabbler0")
+    request.endheaders()
+    loaded = json.loads(request.getresponse().read())
+    
+    # Tell it to the client
+    info["needs_launching"] = (row[4] < loaded["updated_at"])
+
+    print json.dumps(info)
