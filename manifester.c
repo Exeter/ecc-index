@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <regex.h>
 #include <ctype.h>
+#include <time.h>
 #include "ap_config.h"
 #include "ap_provider.h"
 #include "httpd.h"
@@ -38,10 +39,11 @@
   Copyright (c) 2013 Anthony Bau and Exeter Computing Club.
 */
 
-FILE* DEBEST;
-
 //Debugging file:
 FILE* DEBUG;
+
+//Failure log:
+FILE* FAILURE_LOG;
 
 //Access log:
 FILE* ACCESS_LOG;
@@ -83,7 +85,6 @@ typedef struct {
   hit_list_node** buckets;
   int size;
   time_t last_cleared;
-  FILE* dump;
 } hit_list;
 
 static void hit_list_clear(hit_list* map) {
@@ -100,20 +101,6 @@ static void hit_list_clear(hit_list* map) {
       //Free every element here:
       hit_list_node* foot = head->next;
       do {
-        if (map->dump) {
-#ifdef MANIFEST_DEBUG_MODE
-          fprintf(DEBUG, "Printing:\n%s %d\nto %p\n", head->key, head->value, map->dump);
-          fflush(DEBUG);
-#endif
-          fprintf(map->dump, "%s %d\n", head->key, head->value);
-          fflush(map->dump);
-        }
-        else {
-#ifdef MANIFEST_DEBUG_MODE
-          fputs("No map->dump... so, I guess there's nothing to do.\n", DEBUG);
-          fflush(DEBUG);
-#endif
-        }
         free(head->key);
         free(head);
         if (foot) {
@@ -520,98 +507,127 @@ static int run_dynamic(request_rec* r, const char* file) {
     //Wait for the child to finish:
     waitpid(pid, &status, 0);
 
+    if (WIFEXITED(status)) {
 #ifdef MANIFEST_DEBUG_MODE
-    fputs("Child finished execution\n", DEBUG);
-    fflush(DEBUG);
+      fputs("Child finished execution\n", DEBUG);
+      fflush(DEBUG);
 #endif
-
-    //Parse headers:
-    char c, l;
-    char header_name[100];
-    char header_value[100];
-#ifdef MANIFEST_DEBUG_MODE
-    char error_message[3000];
-#endif
-    int modifying_header_name = 1, after_colon = 0, after_newline = 0, headers_ended_properly = 0, s = 0, ei = 0;
-    while (read(stdout_pipe[0], &c, 1) > 0) {
-#ifdef MANIFEST_DEBUG_MODE
-      //Record the output in case we need to log what the result was in case of header failure
-      putc(c, DEBUG);
-      error_message[ei] = c;
-      ++ei;
-#endif
-      if (after_colon) {
-        //Skip the whitespace after colons.
-        if (c == ' ' || c == '\t') continue;
-        else after_colon = 0;
+      char c, l;
+      if (WEXITSTATUS(status)) {
+        //If the child exited with anything other than success, inform whoever cares.
+        fprintf(FAILURE_LOG, "FAIL %s %s %s %s\n", r->method, r->uri, r->args, file);
+        fprintf(FAILURE_LOG, "TIME %d\n", (int)time(NULL));
+        fprintf(FAILURE_LOG, "EXIT CODE %d\n", WEXITSTATUS(status));
+        fputs("OUT:\n  ", FAILURE_LOG);
+        while (read(stdout_pipe[0], &c, 1) > 0) {
+          if (c == '\n') fputs("\n  ", FAILURE_LOG);
+          else fputc(c, FAILURE_LOG);
+        }
+        fputs("\n", FAILURE_LOG);
+        fputs("ERR:\n  ", FAILURE_LOG);
+        while (read(stderr_pipe[0], &c, 1) > 0) {
+          if (c == '\n') fputs("\n  ", FAILURE_LOG);
+          else fputc(c, FAILURE_LOG);
+        }
+        fputs("\n", FAILURE_LOG);
+        fflush(FAILURE_LOG);
+        return HTTP_INTERNAL_SERVER_ERROR;
       }
-      if (c == ':') {
-        //Finalize header name and reset s:
-        header_name[s] = '\0';
-        s = 0;
+      //Parse headers:
+      char header_name[100];
+      char header_value[100];
+#ifdef MANIFEST_DEBUG_MODE
+      char error_message[3000];
+#endif
+      int modifying_header_name = 1, after_colon = 0, after_newline = 0, headers_ended_properly = 0, s = 0, ei = 0;
+      while (read(stdout_pipe[0], &c, 1) > 0) {
+#ifdef MANIFEST_DEBUG_MODE
+        //Record the output in case we need to log what the result was in case of header failure
+        putc(c, DEBUG);
+        error_message[ei] = c;
+        ++ei;
+#endif
+        if (after_colon) {
+          //Skip the whitespace after colons.
+          if (c == ' ' || c == '\t') continue;
+          else after_colon = 0;
+        }
+        if (c == ':') {
+          //Finalize header name and reset s:
+          header_name[s] = '\0';
+          s = 0;
 
-        //Set flags to skip whitespace and move on to modifying the header value:
-        after_colon = 1;
-        modifying_header_name = 0;
-      }
-      else if (c == '\n') {
-        //If we have \n\n, stop our header parsing and move on:
-        if (after_newline) {
-          headers_ended_properly = 1;
-          break;
+          //Set flags to skip whitespace and move on to modifying the header value:
+          after_colon = 1;
+          modifying_header_name = 0;
+        }
+        else if (c == '\n') {
+          //If we have \n\n, stop our header parsing and move on:
+          if (after_newline) {
+            headers_ended_properly = 1;
+            break;
+          }
+          else {
+            //Otherwise, finalize and set the preceeding header value:
+            header_value[s] = '\0';
+            apr_table_set(r->headers_out, header_name, header_value);
+
+            //Then reset our flags and parse the next line.
+            s = 0;
+            modifying_header_name = 1;
+            after_newline = 1;
+          }
+        }
+        else if (modifying_header_name) {
+          header_name[s] = c;
+          ++s;
         }
         else {
-          //Otherwise, finalize and set the preceeding header value:
-          header_value[s] = '\0';
-          apr_table_set(r->headers_out, header_name, header_value);
-
-          //Then reset our flags and parse the next line.
-          s = 0;
-          modifying_header_name = 1;
-          after_newline = 1;
+          header_value[s] = c;
+          ++s;
         }
-      }
-      else if (modifying_header_name) {
-        header_name[s] = c;
-        ++s;
-      }
-      else {
-        header_value[s] = c;
-        ++s;
+        
+        //Unset the newline flag if we're not after a newline:
+        if (c != '\n') after_newline = 0;
       }
       
-      //Unset the newline flag if we're not after a newline:
-      if (c != '\n') after_newline = 0;
-    }
-    
 #ifdef MANIFEST_DEBUG_MODE
-    //Finalize the error message
-    error_message[ei] = '\0';
+      //Finalize the error message
+      error_message[ei] = '\0';
 #endif
 
-    //If we don't get to the end of the headers, say so:
-    if (!headers_ended_properly) {
+      //If we don't get to the end of the headers, say so:
+      if (!headers_ended_properly) {
 #ifdef MANIFEST_DEBUG_MODE
-      fputs("End of script before headers.\n", DEBUG);
-      fprintf(DEBUG, "Output:\n%s\n", error_message);
-      fflush(DEBUG);
+        fputs("End of script before headers.\n", DEBUG);
+        fprintf(DEBUG, "Output:\n%s\n", error_message);
+        fflush(DEBUG);
 
-      fputs("STDERR output:\n", DEBUG);
-      while (read(stderr_pipe[0], &c, 1) > 0) {
-        fputc(c, DEBUG);
+        fputs("STDERR output:\n", DEBUG);
+        while (read(stderr_pipe[0], &c, 1) > 0) {
+          fputc(c, DEBUG);
+        }
+        fputc('\n', DEBUG);
+        fflush(DEBUG);
+#endif
+        return HTTP_INTERNAL_SERVER_ERROR;
       }
-      fputc('\n', DEBUG);
-      fflush(DEBUG);
-#endif
+      
+      //Then read out the entire file.
+      while (read(stdout_pipe[0], &c, 1) > 0) {
+        ap_rputc(c, r);
+      }
+
+      return OK;
+    }
+    else {
+      //If the child exited with anything other than success, inform whoever cares.
+      fprintf(FAILURE_LOG, "ARRESTED %s %s %s %s\n", r->method, r->uri, r->args, file);
+      fprintf(FAILURE_LOG, "TIME %d\n", (int)time(NULL));
+      fputs("\n", FAILURE_LOG);
+      fflush(FAILURE_LOG);
       return HTTP_INTERNAL_SERVER_ERROR;
     }
-    
-    //Then read out the entire file.
-    while (read(stdout_pipe[0], &c, 1) > 0) {
-      ap_rputc(c, r);
-    }
-
-    return OK;
   }
 }
 
@@ -894,12 +910,11 @@ static int run_manifest(request_rec* r, const char* filename) {
   return HTTP_NOT_FOUND;
 }
 
-hit_list* create_hit_list(int size, FILE* dump) {
+hit_list* create_hit_list(int size) {
   hit_list* new_hit_list = (hit_list *) malloc (sizeof(hit_list));
   new_hit_list->buckets = (hit_list_node **) calloc (DEFAULT_DOS_BUCKET_SIZE, sizeof(hit_list_node*));
   new_hit_list->size = DEFAULT_DOS_BUCKET_SIZE;
   new_hit_list->last_cleared = time(NULL);
-  new_hit_list->dump = dump;
   return new_hit_list;
 }
 
@@ -953,10 +968,12 @@ static void register_hooks(apr_pool_t* pool) {
   DEBUG = fopen("/srv/http/logs/manifester.debug", "w");
 #endif
 
+  FAILURE_LOG = fopen("/srv/http/logs/failure_log", "w");
+
   //Create the hit lists
-  server_hit_list = create_hit_list(DEFAULT_DOS_BUCKET_SIZE, fopen("/srv/http/logs/access.dump", "w"));
-  line_cache_record = create_hit_list(DEFAULT_DOS_BUCKET_SIZE, fopen("/srv/http/logs/url.dump", "w"));
-  file_access_record = create_hit_list(DEFAULT_DOS_BUCKET_SIZE, fopen("/srv/http/logs/file.dump", "w"));
+  server_hit_list = create_hit_list(DEFAULT_DOS_BUCKET_SIZE);
+  line_cache_record = create_hit_list(DEFAULT_DOS_BUCKET_SIZE);
+  file_access_record = create_hit_list(DEFAULT_DOS_BUCKET_SIZE);
   
   //Create the caches
   line_cache = create_hashmap(LINE_CACHE_BUCKET_SIZE);

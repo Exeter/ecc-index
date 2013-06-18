@@ -4,6 +4,7 @@ import urlparse
 import os
 import auth
 import sqlite3
+import base64
 import simplejson as json
 
 if __name__ == "__main__":
@@ -25,15 +26,21 @@ if __name__ == "__main__":
 
   # Make sure that the projects table exists
   c.execute("""
-    CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY ASC, name TEXT, team TEXT, github TEXT, updated TEXT)
+    CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY ASC, name TEXT, team TEXT, github TEXT, path TEXT, analytics TEXT, updated TEXT)
   """)
   
+  # Get this user's session key
   kconn = auth.initDB("/home/anthony/ecc-index/db/users.db")
+  k = kconn.cursor()
+  k.execute("""
+    SELECT * FROM keys WHERE uname=?
+  """, (qwargs["uname"],))
+  key = base64.b64decode(k.fetchone()[2])
 
-  # Get the row that w want
+  # Get the row that we want
   c.execute("""
     SELECT * FROM projects WHERE name=?
-  """, (qwargs["project"],))
+  """, (path[2],))
    
   row = c.fetchone()
   if row is None:
@@ -42,7 +49,9 @@ if __name__ == "__main__":
     })
   else:
     team = json.loads(row[2])
-    info = {} # This will be the actual info that's returned to the client
+    info = {
+      "team": team
+    } # This will be the actual info that's returned to the client
     # Make sure that this user is actually on the project team
     if not qwargs["uname"] in team:
       print json.dumps({
@@ -57,6 +66,9 @@ if __name__ == "__main__":
     loaded = json.loads(request.getresponse().read())
     
     # Tell it to the client
-    info["needs_launching"] = (row[4] < loaded["updated_at"])
-
-    print json.dumps(info)
+    info["needs_launching"] = (row[6] < loaded["updated_at"])
+    
+    # Put in the analytics stuff that's in the database
+    info["analytics"] = json.loads(row[5])
+    
+    print auth.encrypt(key, json.dumps(info))
