@@ -494,14 +494,14 @@ static int run_dynamic(request_rec* r, const char* file) {
     }
     if (write(stdin_pipe[1], "\n", 1) < 0) return HTTP_INTERNAL_SERVER_ERROR;
     
+    apr_off_t post_buf_size;
+    const char* post_buf;
     if (strcmp("POST", r->method) == 0) {
-      //Read the post data:
-      apr_off_t size; 
-      const char* buf;
-      util_read (r, &buf, &size);
+      //Read off the post data:
+      util_read (r, &post_buf, &post_buf_size);
       
       //Write it to the child:
-      if (write(stdin_pipe[1], buf, (size_t) size) < 0) return HTTP_INTERNAL_SERVER_ERROR;
+      if (write(stdin_pipe[1], post_buf, (size_t) post_buf_size) < 0) return HTTP_INTERNAL_SERVER_ERROR;
     }
     
     //Wait for the child to finish:
@@ -518,7 +518,26 @@ static int run_dynamic(request_rec* r, const char* file) {
         fprintf(FAILURE_LOG, "FAIL %s %s %s %s\n", r->method, r->uri, r->args, file);
         fprintf(FAILURE_LOG, "TIME %d\n", (int)time(NULL));
         fprintf(FAILURE_LOG, "EXIT CODE %d\n", WEXITSTATUS(status));
-        fputs("OUT:\n  ", FAILURE_LOG);
+        fputs("IN:\n", FAILURE_LOG);
+        //Log the stdin, exactly as we did before.
+        fields = apr_table_elts(r->headers_in);
+        e = (apr_table_entry_t*) fields->elts;
+        for (int i = 0; i < fields->nelts; ++i) {
+          fprintf(FAILURE_LOG, "  %s:%s\n", e[i].key, e[i].val);
+        }
+        fputs("  \n  ", FAILURE_LOG);
+        if (strcmp("POST", r->method) == 0) {
+          //We've already read off the post data, so write it to the logs:
+          for (int i = 0; i < post_buf_size; ++i) {
+            if (post_buf[i] == '\n') {
+              fputs("\n  ", FAILURE_LOG);
+            }
+            else {
+              fputc(post_buf[i], FAILURE_LOG);
+            }
+          }
+        }
+        fputs("\nOUT:\n  ", FAILURE_LOG);
         while (read(stdout_pipe[0], &c, 1) > 0) {
           if (c == '\n') fputs("\n  ", FAILURE_LOG);
           else fputc(c, FAILURE_LOG);
@@ -529,7 +548,7 @@ static int run_dynamic(request_rec* r, const char* file) {
           if (c == '\n') fputs("\n  ", FAILURE_LOG);
           else fputc(c, FAILURE_LOG);
         }
-        fputs("\n", FAILURE_LOG);
+        fputs("\n\n", FAILURE_LOG);
         fflush(FAILURE_LOG);
         return HTTP_INTERNAL_SERVER_ERROR;
       }
@@ -624,7 +643,26 @@ static int run_dynamic(request_rec* r, const char* file) {
       //If the child exited with anything other than success, inform whoever cares.
       fprintf(FAILURE_LOG, "ARRESTED %s %s %s %s\n", r->method, r->uri, r->args, file);
       fprintf(FAILURE_LOG, "TIME %d\n", (int)time(NULL));
-      fputs("\n", FAILURE_LOG);
+      fputs("IN:\n", FAILURE_LOG);
+      //Log the stdin, exactly as we did before.
+      fields = apr_table_elts(r->headers_in);
+      e = (apr_table_entry_t*) fields->elts;
+      for (int i = 0; i < fields->nelts; ++i) {
+        fprintf(FAILURE_LOG, "  %s:%s\n", e[i].key, e[i].val);
+      }
+      fputs("  \n  ", FAILURE_LOG);
+      if (strcmp("POST", r->method) == 0) {
+        //We've already read off the post data, so write it to the logs:
+        for (int i = 0; i < post_buf_size; ++i) {
+          if (post_buf[i] == '\n') {
+            fputs("\n  ", FAILURE_LOG);
+          }
+          else {
+            fputc(post_buf[i], FAILURE_LOG);
+          }
+        }
+      }
+      fputs("\n\n", FAILURE_LOG);
       fflush(FAILURE_LOG);
       return HTTP_INTERNAL_SERVER_ERROR;
     }

@@ -14,9 +14,9 @@ if __name__ == "__main__":
   for key in qwargs:
     qwargs[key] = qwargs[key][0]
 
-  conn = sqlite3.connect("/home/anthony/Projects/new_ecc/news.db")
+  conn = sqlite3.connect("/home/anthony/ecc-index/db/news.db")
   c = conn.cursor()
-  virtual_last = int(qwargs["last"] if "last" in qwargs else time.time())
+  virtual_last = int(float(qwargs["last"]) if "last" in qwargs else time.time())
 
   #Make sure that this table exists
   c.execute("""

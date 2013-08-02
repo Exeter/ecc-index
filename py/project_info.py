@@ -35,40 +35,46 @@ if __name__ == "__main__":
   k.execute("""
     SELECT * FROM keys WHERE uname=?
   """, (qwargs["uname"],))
-  key = base64.b64decode(k.fetchone()[2])
+  keyrow = k.fetchone()
+  if keyrow is not None:
+    key = base64.b64decode(keyrow[2])
 
-  # Get the row that we want
-  c.execute("""
-    SELECT * FROM projects WHERE name=?
-  """, (path[2],))
-   
-  row = c.fetchone()
-  if row is None:
-    print json.dumps({
-      "error": "NO SUCH PROJECT"
-    })
-  else:
-    team = json.loads(row[2])
-    info = {
-      "team": team
-    } # This will be the actual info that's returned to the client
-    # Make sure that this user is actually on the project team
-    if not qwargs["uname"] in team:
+    # Get the row that we want
+    c.execute("""
+      SELECT * FROM projects WHERE name=?
+    """, (path[2],))
+     
+    row = c.fetchone()
+    if row is None:
       print json.dumps({
-        "error": "NOT ON TEAM"
+        "error": "NO SUCH PROJECT"
       })
-    
-    # See if github is better than us
-    request = httplib.HTTPSConnection("api.github.com")
-    request.putrequest("GET", row[3])
-    request.putheader("User-Agent", "dabbler0")
-    request.endheaders()
-    loaded = json.loads(request.getresponse().read())
-    
-    # Tell it to the client
-    info["needs_launching"] = (row[6] < loaded["updated_at"])
-    
-    # Put in the analytics stuff that's in the database
-    info["analytics"] = json.loads(row[5])
-    
-    print auth.encrypt(key, json.dumps(info))
+    else:
+      team = json.loads(row[2])
+      info = {
+        "team": team
+      } # This will be the actual info that's returned to the client
+      # Make sure that this user is actually on the project team
+      if not qwargs["uname"] in team:
+        print json.dumps({
+          "error": "NOT ON TEAM"
+        })
+      
+      # See if github is better than us
+      request = httplib.HTTPSConnection("api.github.com")
+      request.putrequest("GET", row[3])
+      request.putheader("User-Agent", "dabbler0")
+      request.endheaders()
+      loaded = json.loads(request.getresponse().read())
+      
+      # Tell it to the client
+      info["needs_launching"] = (row[6] < loaded["updated_at"])
+      
+      # Put in the analytics stuff that's in the database
+      info["analytics"] = json.loads(row[5])
+      
+      print auth.encrypt(key, json.dumps(info))
+  else:
+    print json.dumps({
+      "error": "NO ESTABLISHED SESSKEY"
+    })

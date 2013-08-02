@@ -127,14 +127,27 @@ if __name__ == "__main__":
     assert (time[0] == "TIME" and len(time) == 2), "Misformatted log file."
     faildict["timestamp"] = int(time[1])
     
-    #The following only applies if the child exited normally:
+
+    # The following only applies if the child exited normally:
     if request[0] == "FAIL":
       # Get the error code line
       error_code = failure.readline().rstrip().split(" ")
       assert (error_code[0] == "EXIT" and error_code[1] == "CODE" and len(error_code) == 3), "Misformatted log file."
       faildict["error_code"] = int(error_code[2])
 
-      assert (failure.readline().rstrip() == "OUT:"), "Misformatted log file."
+    # Get the stdin
+    assert (failure.readline().rstrip() == "IN:"), "Misformatted log file."
+    input_line = failure.readline()
+    total_input = ""
+    while input_line[0:2] == "  ":
+      total_input += input_line[2:]
+      input_line = failure.readline()
+
+    faildict["stdin"] = total_input
+    
+    # The following only applies in the child existed normally:
+    if request[0] == "FAIL":
+      assert (input_line.rstrip() == "OUT:"), "Misformatted log file."
 
       # Get the stdout
       output_line = failure.readline()
@@ -155,9 +168,6 @@ if __name__ == "__main__":
         error_line = failure.readline()
       
       faildict["stderr"] = total_stderr
-    else:
-      # Otherwise just advance past the newline here
-      failure.readline()
 
     print faildict
 
