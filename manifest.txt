@@ -1,29 +1,29 @@
-\/index\.html /home/anthony/ecc-index/html/index.html STATIC
-\/about\.html /home/anthony/ecc-index/html/about.html STATIC
-\/login\.html /home/anthony/ecc-index/html/login.html STATIC
-\/register\.html /home/anthony/ecc-index/html/register.html STATIC
-\/dashboard\.html /home/anthony/ecc-index/html/dashboard.html STATIC
-\/post\.html /home/anthony/ecc-index/html/post.html STATIC
-\/pwchange\.html /home/anthony/ecc-index/html/pwchange.html STATIC
-\/index\/news /home/anthony/ecc-index/py/get_news.py DYNAMIC
+\/index\.html /home/daemon/ecc-index/html/index.html STATIC
+\/about\.html /home/daemon/ecc-index/html/about.html STATIC
+\/login\.html /home/daemon/ecc-index/html/login.html STATIC
+\/register\.html /home/daemon/ecc-index/html/register.html STATIC
+\/dashboard\.html /home/daemon/ecc-index/html/dashboard.html STATIC
+\/post\.html /home/daemon/ecc-index/html/post.html STATIC
+\/pwchange\.html /home/daemon/ecc-index/html/pwchange.html STATIC
+\/index\/news /home/daemon/ecc-index/py/get_news.py DYNAMIC
 \/index\/projects /srv/http/github_projects.json STATIC
-\/index\/style\.css /home/anthony/ecc-index/index.css STATIC
-\/index/post_news /home/anthony/ecc-index/py/post_news.py DYNAMIC
-\/jslib\/(.*) /jslib/\1 STATIC
-\/font\/(.*) /font/\1 STATIC
-\/authenticate /home/anthony/ecc-index/py/authenticate.py DYNAMIC
-\/create_user /home/anthony/ecc-index/py/register.py DYNAMIC
-\/validate /home/anthony/ecc-index/py/verify.py DYNAMIC
-\/logout /home/anthony/ecc-index/py/logout.py DYNAMIC
-\/pwchange /home/anthony/ecc-index/py/pwchange.py DYNAMIC
-\/projectinfo\/(.*) /home/anthony/ecc-index/py/project_info.py DYNAMIC
-\/projectlist /home/anthony/ecc-index/py/my_projects.py DYNAMIC
-\/invite_team /home/anthony/ecc-index/py/add_to_project.py DYNAMIC
-\/quit_project /home/anthony/ecc-index/py/quit_project.py DYNAMIC
+\/index\/style\.css /home/daemon/ecc-index/index.css STATIC
+\/index/post_news /home/daemon/ecc-index/py/post_news.py DYNAMIC
+\/jslib\/(.*) /home/daemon/ecc-index/jslib/\1 STATIC
+\/font\/(.*) /home/daemon/ecc-index/font/\1 STATIC
+\/authenticate /home/daemon/ecc-index/py/authenticate.py DYNAMIC
+\/create_user /home/daemon/ecc-index/py/register.py DYNAMIC
+\/validate /home/daemon/ecc-index/py/verify.py DYNAMIC
+\/logout /home/daemon/ecc-index/py/logout.py DYNAMIC
+\/pwchange /home/daemon/ecc-index/py/pwchange.py DYNAMIC
+\/projectinfo\/(.*) /home/daemon/ecc-index/py/project_info.py DYNAMIC
+\/projectlist /home/daemon/ecc-index/py/my_projects.py DYNAMIC
+\/invite_team /home/daemon/ecc-index/py/add_to_project.py DYNAMIC
+\/quit_project /home/daemon/ecc-index/py/quit_project.py DYNAMIC
 # --------
 # Debugging
 # These are just to test the failure handling functions
 # --------
 \/fail /home/anthony/deliberate_failure.py DYNAMIC
 \/segfault /home/anthony/segfault.o DYNAMIC
-\/test\.html /home/anthony/ecc-index/html/test.html STATIC
+\/test\.html /home/daemon/ecc-index/html/test.html STATIC
