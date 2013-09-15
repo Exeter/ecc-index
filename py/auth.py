@@ -107,23 +107,7 @@ def getHex(conn, col, uname):
     SELECT * FROM users WHERE uname=?
   """, (uname,))
   
-  row = c.fetchone()
-
-  if row == None:
-    return None
-  else:
-    return int(row[col], 16)
-
-def isUser(conn, uname):
-  c = conn.cursor()
-  c.execute("""
-    SELECT * FROM users WHERE uname=? LIMIT 1
-  """, (uname,))
-
-  if (len(c.fetchall()) > 0):
-    return True
-  else:
-    return False
+  return int(c.fetchone()[col], 16)
 
 def setHex(conn, col, uname, value):
   """
@@ -172,23 +156,20 @@ def createUser(conn, uname, verifier, salt):
     return True
 
 def generateKey(conn, uname, A):
-  if not isUser(conn, uname):
-    return None
-  else:
-    salt = getHex(conn, SALT, uname)
-    verifier = getHex(conn, VERIFIER, uname)
-    b = random.randint(0, LARGE_PRIME - 1)
-    B = (MUL_PARAM * verifier + pow(GENERATOR, b, LARGE_PRIME)) % LARGE_PRIME
-    u = hash(A, B)
-    S = pow(A * pow(verifier, u, LARGE_PRIME), b, LARGE_PRIME)
-    K = hashlib.sha256(intoHex(S)).digest() #SHA256 to generate a 32-bit AES key
-    
-    return {
-      "s": intoHex(salt),
-      "M": hash(LARGE_PRIME, hash(uname), salt, A, B, K),
-      "K": K,
-      "B": intoHex(B)
-    }
+  salt = getHex(conn, SALT, uname)
+  verifier = getHex(conn, VERIFIER, uname)
+  b = random.randint(0, LARGE_PRIME - 1)
+  B = (MUL_PARAM * verifier + pow(GENERATOR, b, LARGE_PRIME)) % LARGE_PRIME
+  u = hash(A, B)
+  S = pow(A * pow(verifier, u, LARGE_PRIME), b, LARGE_PRIME)
+  K = hashlib.sha256(intoHex(S)).digest() #SHA256 to generate a 32-bit AES key
+  
+  return {
+    "s": intoHex(salt),
+    "M": hash(LARGE_PRIME, hash(uname), salt, A, B, K),
+    "K": K,
+    "B": intoHex(B)
+  }
 
 def encrypt(key, message):
   iv = Random.new().read(AES.block_size)
@@ -211,6 +192,7 @@ def decrypt(key, json_message):
   encrypter = AES.new(key, AES.MODE_CBC, iv)
   decrypted = encrypter.decrypt(message_text)[:message["length"]]
   checksum =  hashlib.md5(decrypted).hexdigest().upper()
+  print "Checksum: %s" % checksum
   if (checksum == message["checksum"]):
     return decrypted
   else:
