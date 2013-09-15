@@ -1,3 +1,25 @@
+/*
+  Copyright (c) 2013 Exeter Computing Club and Anthony Bau
+  Created 2013 by Anthony Bau
+  
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice, the above creation notice, and this permission 
+  notice shall be included in all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  THE SOFTWARE.
+*/
 #include <stdio.h>
 #include <unistd.h>
 #include <regex.h>
@@ -12,18 +34,21 @@
 #include "http_protocol.h"
 #include "http_request.h"
 
-//Nothing will be logged in the DEBUG file if this is undefined:
 #define MANIFEST_DEBUG_MODE
-
-//There shall be no Log of Damnation if you remove this definition:
 #define DAMN_ABUSERS
 
 #define LINE_CACHE_BUCKET_SIZE 37
-//#define LINE_CACHE_CLEAR_FREQ 3600
-#define LINE_CACHE_CLEAR_FREQ 30 //DEBUGGING
+#ifndef MANIFEST_DEBUG_MODE //Normal clear frequencies for production use
+#define LINE_CACHE_CLEAR_FREQ 3600
+#define STATIC_FILE_CLEAR_FREQ 3600
+#define BLACKLIST_CLEAR_FREQUENCY 3600
+#endif
+#ifdef MANIFEST_DEBUG_MODE //Insanely quick clear frequencies for debug use
+#define STATIC_FILE_CLEAR_FREQ 30
+#define LINE_CACHE_CLEAR_FREQ 30
+#define BLACKLIST_CLEAR_FREQUENCY 30
+#endif
 #define LINE_CACHE_THRESHOLD 300
-//#define STATIC_FILE_CLEAR_FREQ 3600
-#define STATIC_FILE_CLEAR_FREQ 30 //DEBUGGING
 #define FILE_TOTAL_CACHE_THRESHOLD 200
 #define FILE_PTR_CACHE_THRESHOLD 50
 #define BLOCK_SIZE 100
@@ -31,13 +56,7 @@
 #define FORMAT_RESULT_SIZE 1000
 #define PATH_DESCRIPTOR_LENGTH 500
 #define BLACKLIST_THRESHOLD 720
-//#define BLACKLIST_CLEAR_FREQUENCY 3600
-#define BLACKLIST_CLEAR_FREQUENCY 30 //DEBUGGING
 #define DEFAULT_DOS_BUCKET_SIZE 30
-
-/*
-  Copyright (c) 2013 Anthony Bau and Exeter Computing Club.
-*/
 
 //Debugging file:
 FILE* DEBUG;
@@ -746,6 +765,14 @@ static int run_static(request_rec* r, const char* filename) {
   ap_set_content_type(r, mimetype);
 
   FILE* file = fopen(filename, "rb");
+
+  if (file == NULL) {
+#ifdef MANIFEST_DEBUG_MODE
+    fprintf(DEBUG, "Error opening file: %s\n", strerror(errno));
+    if (errno == 13) return HTTP_FORBIDDEN;
+    else return HTTP_INTERNAL_SERVER_ERROR;
+#endif
+  }
   
   //Get file length
   fseek(file, 0L, SEEK_END);

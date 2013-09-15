@@ -1,14 +1,4 @@
 #!/usr/bin/env python
-import hashlib
-import ssl
-from Crypto import Random
-from Crypto.Random import random
-from Crypto.Cipher import AES
-import base64
-import math
-import sqlite3
-import simplejson as json
-
 """
   Functions implementing the SRP protocol, compatible with associated JavaScript library auth.js (should be packaged with this)
   
@@ -37,6 +27,15 @@ import simplejson as json
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
   THE SOFTWARE.
 """
+import hashlib
+import ssl
+from Crypto import Random
+from Crypto.Random import random
+from Crypto.Cipher import AES
+import base64
+import math
+import sqlite3
+import simplejson as json
 
 VERIFIER = 2
 SALT = 3
