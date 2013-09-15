@@ -1,0 +1,294 @@
+@charset "UTF-8"
+* {
+  margin:0px;
+  padding:0px;
+  overflow:hidden;
+}
+body {
+  font-family:'Lato', 'Verdana', 'Arial', sans-serif;
+}
+div.blockish {
+  position:absolute;
+}
+div#top {
+  top:0px;
+  left:0px;
+  right:0px;
+  height:100px
+}
+div#header {
+  height:70px;
+  font-size:36px;
+  text-transform:uppercase;
+  line-height:70px;
+  font-weight:lighter;
+  background-color:#710001;
+  color:#F2F2FF;
+  padding-left:5px;
+}
+div#header a {
+  text-decoration:inherit;
+  color:inherit;
+}
+div#links {
+  border-top:1px solid #888;
+  background-color:#CCC;
+  height:30px;
+  line-height:30px;
+  font-size:14px;
+  text-transform:uppercase; /* Let's please Austin, I guess */
+  box-shadow:0px 6px 3px -3px #666 inset, 0px -6px 3px -3px #666 inset;
+}
+div.link {
+  display:inline-block;
+  border-right:1px solid #888;
+  padding-right:5px;
+  padding-left:5px;
+  cursor:pointer;
+}
+div.link a {
+  text-decoration:inherit;
+  color:inherit;
+  transition: color 0.4s ease-in;
+}
+div.link a:hover {
+  color:#C00;
+}
+div#wrapper {
+  border-top:1px solid #888;
+  top:100px;
+  left:0px;
+  right:0px;
+  bottom:0px;
+}
+div#bottom_header {
+  top:0px;
+  left:0px;
+  right:0px;
+  border-bottom:1px solid #888;
+  height:29px;
+}
+div#bottom_body {
+  top:30px;
+  left:0px;
+  right:0px;
+  bottom:0px;
+}
+div#left_header {
+  top:0px;
+  bottom:0px;
+  left:0px;
+  height:29px;
+  line-height:29px;
+  border-bottom:1px solid #888;
+  font-size:20px;
+  text-transform:uppercase;
+  width:195px;
+  padding-left:5px;
+}
+div#left_body {
+  border-right:1px solid #888;
+  background-color:#F5F5F5;
+  top:30px;
+  bottom:0px;
+  left:0px;
+  width:200px;
+  overflow-y:auto;
+}
+div#right_header {
+  top:0px;
+  height:30px;
+  left:200px;
+  right:0px;
+}
+div#right_body {
+  top:30px;
+  bottom:0px;
+  left:200px;
+  right:0px;
+  overflow-y:auto;
+}
+/*(end note)*/
+
+div.blue_header {
+  color:#2C3E50;
+  font-size:20px;
+  height:30px;
+  line-height:30px;
+  padding-left:5px;
+  text-transform:uppercase;
+}
+div.section {
+  padding-left:10px;
+}
+div.blue_subheader {
+  color:#2C3E50;
+  font-size:15px;
+  height:15px;
+  line-height:15px;
+  text-transform:uppercase;
+}
+div.red_header {
+  color:#710001;
+  padding-left:5px;
+  font-size:20px;
+  height:30px;
+  line-height:30px;
+  text-transform:uppercase;
+}
+div.back_header {
+  color:#F2F2FF;
+  background-color:#710001;
+  font-size:20px;
+  height:30px;
+  line-height:30px;
+  padding-left:5px;
+  text-transform:uppercase;
+}
+div.project_list {
+  padding-left:15px;
+}
+div.project, div.contact, div.faq {
+  padding:2px;
+}
+div.project a, div.contact a, div.faq a {
+  cursor:pointer;
+  color:#2C3E50;
+  text-transform:uppercase;
+  font-size:13px;
+  text-decoration:none;
+  transition:color 0.3s ease-in;
+}
+div.project a:hover, div.contact a:hover, div.faq a:hover {
+  color:#C00;
+}
+div#faq_wrapper {
+  padding:5px;
+}
+div#news {
+  padding-left:10px;
+  padding-right:10px;
+  padding-top:5px;
+}
+div.news_post {
+  padding:10px;
+}
+div.news_body {
+  padding-left:10px;
+}
+div.ag_commit {
+  margin-left:10px;
+  padding-top:5px;
+  padding-bottom:5px;
+}
+div.ag_repo_name {
+  border-bottom:1px solid #888;
+}
+div.ag_repo {
+  padding:5px;
+}
+div.ag_commit_message a {
+  text-decoration:none;
+  color:#555;
+  transition: color 0.3s;
+}
+div.ag_commit_message a:hover {
+  color:#710001;
+}
+a.ag_commit_committer {
+  text-decoration:none; 
+}
+span.ag_commit_timestamp {
+  padding-left:10px;
+}
+/*
+input.invisible_checkbox {
+  display:none;
+}
+label.invisible_checkbox_label {
+  cursor:pointer;
+}
+input.invisible_checkbox:checked + div.news_body {
+  display:none;
+}
+*/
+input.collapser, div.collapsible {
+  display: none;
+}
+label.collapsible_label {
+  cursor: pointer;
+}
+input.collapser:checked ~ div.collapsible {
+  display: block;
+}
+div.about_body {
+  padding-left:10px;
+}
+div.about_block {
+  padding:10px;
+}
+
+div#contact_list {
+  padding-left:10px;
+}
+p {
+  text-indent:30px;
+  margin-top:5px;
+  margin-bottom:5px;
+  line-height:25px;
+}
+div.field_wrapper {
+  margin:10px;
+}
+div.field_name {
+  display:inline-block;
+  width:85px;
+  font-size:15px;
+  padding-right:5px;
+  text-transform:uppercase;
+  color: #2C3E50;
+  vertical-align:center;
+}
+input.field {
+  width:180px;
+  border:1px solid #888;
+  height:30px;
+  font-size:17px;
+  line-height:30px;
+  font-family:'Lato', Verdana, Arial, sans-serif;
+  padding:2px;
+  outline:none;
+  vertical-align:center;
+  transition:border-color 0.3s, box-shadow 0.3s;
+}
+input.field:focus {
+  border-color:#000;
+  box-shadow:0 2px 1px -1px #CCC inset;
+}
+button.field {
+  background:#710001;
+  color:#fff;
+  border:1px solid #888;
+  height:25px;
+  line-height:15px;
+  padding:5px;
+  font-size:15px;
+  text-transform:uppercase;
+  cursor:pointer;
+  transition:background 0.3s;
+}
+button.field:hover, button.field:focus {
+   background:#C00;
+}
+div.error_message, span.error_message {
+  color:#F00;
+  text-transform:uppercase;
+  font-size:13px;
+  padding:5px;
+}
+div#incorrect {
+  display:none;
+}
+button.small.field {
+  font-size:12px;
+}
