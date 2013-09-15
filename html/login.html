@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link href='http://fonts.googleapis.com/css?family=Lato:300,400' rel='stylesheet' type='text/css'/>
+    <link href="/index/style.css" rel="stylesheet" type="text/css"/>
+    <script src="/jslib/rollups/aes.js"></script>
+    <script src="/jslib/rollups/md5.js"></script>
+    <script src="/jslib/rollups/sha512.js"></script>
+    <script src="/jslib/rollups/sha256.js"></script>
+    <script src="/jslib/BigInt.js"></script>
+    <script src="/jslib/auth.js"></script>
+    <script src="/jslib/jquery.min.js"></script>
+    <script>
+      $(function() {
+        if (localStorage["SRP_UNAME"] && localStorage["SRP_SESS_KEY"]) {
+          location.href = "/dashboard.html";
+        }
+        function login() {
+          var rand = generateA(),
+              uname = $("#username").val()
+              pass = $("#password").val();
+          $.ajax({
+            url:"/authenticate",
+            method:"GET",
+            data:{
+              "uname": uname,
+              "A": bigInt2str(rand.A, 16)
+            },
+            dataType:"json",
+            success:function(data) {
+              if (data.error) {
+                if (data.error == "NO SUCH USER") {
+                  $("#incorrect").text("Nonexistent username").css("display", "inline-block");
+                  $("#username").focus();
+                }
+                else {
+                  $("#incorrect").text("An error occurred. Check username and password").css("display", "inline-block");
+                  $("#password").focus();
+                }
+              }
+              else {
+                var client_data = {
+                      "uname": uname,
+                      "password": pass,
+                      "a": rand.a,
+                      "A": rand.A
+                    },
+                    server_data = {
+                      "B": data.B,
+                      "salt": data.s
+                    },
+                    kdict = generateKey(client_data, server_data);
+                $.ajax({
+                  url: "/validate",
+                  method: "GET", 
+                  data: {
+                    "message": JSON.stringify(encrypt(kdict.K, "SRP_CLIENT_SUCCESS_MESSAGE")),
+                    "uname": uname
+                  },
+                  dataType: "json",
+                  success:function(data) {
+                    if (data.message != null && decrypt(kdict.K, JSON.parse(data.message)) == "SRP_SERVER_SUCCESS_MESSAGE") {
+                      localStorage["SRP_SESS_KEY"] = kdict.K.toString(CryptoJS.enc.Base64);
+                      localStorage["SRP_UNAME"] = uname;
+                      location.href = "/dashboard.html"
+                    }
+                    else {
+                      $("#incorrect").text("Incorrect username or password").css("display", "inline-block");
+                      $("#password").focus();
+                    }
+                  }
+                });
+              }
+            }
+          });
+        };
+
+        $("#login").click(login);
+        $("#password").keydown(function(e) { if (e.keyCode == 13) login();});
+        $("#username").keydown(function(e) { if (e.keyCode == 13) login();});
+      });
+    </script>
+    <style>
+      div#login_header {
+        top:0;
+        left:0;
+        bottom:0;
+        width:294px;
+        height:29px;
+        border-right:1px solid #888;
+        border-bottom:1px solid #888;
+      }
+      div#login_body {
+        top:30px;
+        left:0;
+        bottom:0;
+        width:300px;
+      }
+      div#expo_header {
+        top:0;
+        left:300px;
+        right:0;
+        height:29px;
+        border-bottom:1px solid #888;
+        padding-left:5px;
+      }
+      div#expo_body {
+        top:30px;
+        left:299px;
+        background:#EEE;
+        right:0;
+        bottom:0;
+        border-left:1px solid #888;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="top" class="blockish">
+      <div id="header">
+        <a href="/index.html">Exeter Computing Club</a>
+      </div>
+      <div id="links">
+        <div class="link">
+          <a href="/login.html">login</a>
+        </div>
+        <div class="link">
+          <a href="/about.html">about</a>
+        </div>
+        <div class="link">
+          <a href="https://github.com/Exeter">github</a>
+        </div>
+        <div class="link">
+          <a>moodle</a>
+        </div>
+      </div>
+    </div>
+    <div id="wrapper" class="blockish">
+      <div id="left_header" class="blockish blue_header">
+        FAQ
+      </div>
+      <div id="left_body" class="blockish">
+        <div id="faq_wrapper">
+          <div class="faq">
+            <a href="#">How secure are your systems?</a>
+          </div>
+          <div class="faq">
+            <a href="#">Who sees my data?</a>
+          </div>
+          <div class="faq">
+            <a href="#">I forgot my password</a>
+          </div>
+        </div>
+      </div>
+      <div id="right_header" class="blockish back_header">
+        Login
+      </div>
+      <div id="right_body" class="blockish">
+        <div class="field_wrapper">
+          <div class="field_name">
+            Username 
+          </div>
+          <input id="username" class="field">
+        </div>
+        <div class="field_wrapper">
+          <div class="field_name">
+            Password
+          </div>
+          <input id="password" class="field" type="password">
+        </div>
+        <div class="field_wrapper">
+          <button id="login" class="field">Login</button>
+          <div id="incorrect" class="error_message">Incorrect username or password</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

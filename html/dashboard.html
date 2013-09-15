@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link href='http://fonts.googleapis.com/css?family=Lato:300,400' rel='stylesheet' type='text/css'/>
+    <link href="/index/style.css" rel="stylesheet" type="text/css"/>
+    <script src="/jslib/rollups/aes.js"></script>
+    <script src="/jslib/rollups/md5.js"></script>
+    <script src="/jslib/rollups/sha512.js"></script>
+    <script src="/jslib/rollups/sha256.js"></script>
+    <script src="/jslib/BigInt.js"></script>
+    <script src="/jslib/auth.js"></script>
+    <script src="/jslib/jquery.min.js"></script>
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    <script type="text/javascript">
+      google.load("visualization", "1", {packages:["corechart"]});
+      $(function() {
+        if (!(localStorage["SRP_UNAME"] && localStorage["SRP_SESS_KEY"])) {
+          location.href = "/login.html";
+        }
+        $("#logout").click(function() {
+          $.ajax({
+            url:"/logout",
+            method:"GET",
+            data: {
+              "uname": localStorage["SRP_UNAME"],
+              "signature": JSON.stringify(encrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), "SRP_LOGOUT_COMMAND"))
+            },
+            dataType:"json",
+            success:function(data) {
+              if (data.success) {
+                delete localStorage["SRP_SESS_KEY"];
+                delete localStorage["SRP_UNAME"];
+                location.href = "/index.html"
+              }
+            }
+          })
+        });
+
+        var viewed_project,
+            abbr_months = ["Jan", "Feb", "Mar", "Apr", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        
+        function htmlescape(str) {
+          //Just shorthand
+          return $("<div>").text(str).html();
+        }
+        
+        function getMonthDay(s) {
+          var d = new Date(0);
+          d.setUTCSeconds(s);
+          return abbr_months[d.getMonth()] + " " + d.getDate();
+        }
+
+        function formatFailureRecord(record, id) {
+          return '<div class="blue_list_item">' + 
+          '  <label for="' + id + '" class="invisible_checkbox_label">' + getMonthDay(record.timestamp) + ': <span class="failure_value">' + htmlescape(record.request[4]) + '</span></label><input type="checkbox" id="' + id + '" class="invisible_checkbox">' +
+          '  <div class="failure_record">' + 
+          '    <div class="failure_record_method">Method:<span class="failure_value">' + htmlescape(record.request[1]) + '</span></div>' +
+          '    <div class="failure_record_path">Path:<span class="failure_value">' + htmlescape(record.request[2]) + '</span></div>' + 
+          '    <div class="failure_record_qs">Query String:<span class="failure_value">' + htmlescape(record.request[3]) + '</span></div>' + 
+          '    <div class="failure_record_qs">Exit Code:<span class="failure_value">' + record.error_code + '</span></div>' + 
+          '    <div class="failure_record_stdin">Stdin:' + 
+          '      <pre>' + htmlescape(record.stdin) + '</pre>' +
+          '    </div>' + 
+          '    <div class="failure_record_stdout">Stdout:' + 
+          '      <pre>' + htmlescape(record.stdout) + '</pre>' +
+          '    </div>' + 
+          '    <div class="failure_record_stderr">Stderr:' + 
+          '      <pre>' + htmlescape(record.stderr) + '</pre>' +
+          '    </div>' +
+          '  </div>' + 
+          '</div>'
+        }
+
+        function formatArrestRecord(record, id) {
+          return '<div class="blue_list_item">' + 
+          '  <label for="' + id + '" class="invisible_checkbox_label">' + getMonthDay(record.timestamp) + ': <span class="failure_value">' + htmlescape(record.request[4]) + '</span></label><input type="checkbox" id="' + id + '" class="invisible_checkbox">' +
+          '  <div class="failure_record">' +
+          '    <div class="failure_arrested">Arrested</div>' + 
+          '    <div class="failure_record_method">Method:<span class="failure_value">' + htmlescape(record.request[1]) + '</span></div>' +
+          '    <div class="failure_record_path">Path:<span class="failure_value">' + htmlescape(record.request[2]) + '</span></div>' + 
+          '    <div class="failure_record_qs">Query String:<span class="failure_value">' + htmlescape(record.request[3]) + '</span></div>' + 
+          '    <div class="failure_record_stdin">Stdin:' + 
+          '      <pre>' + htmlescape(record.stdin) + '</pre>' +
+          '    </div>' + 
+          '  </div>' + 
+          '</div>'
+        }
+
+        function drawChart(labels, data, el) {
+          //Make a chart of the endpoint analytics
+          var data_array = [], data, options, chart;
+          for (key in data) {
+            data_array.push([key, data[key]]);
+          }
+          data_array.sort(function(a, b) { return b[1] - a[1] });
+          data_array.unshift(labels);
+          data = google.visualization.arrayToDataTable(data_array);
+          options = {
+            title: "Endpoint hits",
+            chartArea: {
+              height: data_array.length * 30,
+              width:"50%"
+            },
+            series: [
+              {
+                //color:"#710001",
+                color:"#C0C0C0",
+                visibleInLegend:false
+              }
+            ],
+            isHtml: true
+          };
+          $(el).height(data_array.length * 30);
+          chart = new google.visualization.BarChart(el);
+          chart.draw(data, options);
+        }
+        
+        function getProjectInfo(project) {
+          $.ajax({
+            url: "/projectinfo/" + project,
+            method: "GET",
+            data: {
+              "uname": localStorage["SRP_UNAME"]
+            },
+            dataType: "json",
+            success: function(data) {
+              $(".initially_hidden").show();
+
+              //Decrypt the data we just got
+              data = JSON.parse(decrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), data));
+
+              console.log(data);
+
+              //Format it.
+              if (data.needs_launching) {
+                $("#launch").show();
+                $("#dontlaunch").hide();
+              }
+              $("#team_list").html("");
+              for (var i = 0; i < data.team.length; i += 1) {
+                $("#team_list").append($("<div>").addClass("blue_list_item").text(" \u00B7 " + data.team[i]));
+              }
+              
+              data.analytics.failures.reverse();
+              $("#failure_record_list").html("");
+
+              for (var i = 0; i < data.analytics.failures.length; i += 1) {
+                if (data.analytics.failures[i].request[0] == "FAIL") {
+                  $("#failure_record_list").append(formatFailureRecord(data.analytics.failures[i], "failure_record_" + i));
+                }
+                else {
+                  $("#failure_record_list").append(formatArrestRecord(data.analytics.failures[i], "failure_record_" + i));
+                }
+              }
+
+              drawChart(["Endpoint", "Hits"], data.analytics.endpoints, document.getElementById("endpoint_chart"));
+              drawChart(["Url", "Hits"], data.analytics.urls, document.getElementById("url_chart"));
+
+              $("#right_header").text(project);
+
+              viewed_project = project;
+            }
+          });
+        }
+
+        $.ajax({
+          url: "/projectlist",
+          method: "GET",
+          data: {
+            "uname": localStorage["SRP_UNAME"]
+          },
+          dataType: "json",
+          success: function(data) {
+            var inner_projects = $("#inner_projects");
+            
+            //Decrypt the data we just got
+            data = JSON.parse(decrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), data));
+            
+            for (var i = 0; i < data.teams.length; i += 1) {
+              inner_projects.append($("<div>").addClass("project").append(
+                $("<a>").click((function() {
+                  var team = data.teams[i];
+                  return function() {
+                    getProjectInfo(team);
+                  }
+                }())).text(data.teams[i])
+              ));
+            }
+
+            $("div.project a").first().click();
+          }
+        })
+
+        $("#add_team_member span").click(function() {
+          $("#fade").show();
+          $("#add_popup").show();
+        });
+        
+        $("#add_submit").click(function() {
+          $.ajax({
+            url: "/invite_team",
+            data: {
+              uname: localStorage["SRP_UNAME"],
+              info: JSON.stringify(encrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), JSON.stringify({
+                target: $("#add_uname").val(),
+                project: viewed_project
+              })))
+            },
+            dataType: "json",
+            success: function(data) {
+              if (data.success) {
+                $("#add_uname").val("");
+                $("#fade").hide();
+                $("#add_popup").hide();
+                $("#add_error").hide();
+                getProjectInfo(viewed_project);
+              }
+              else {
+                $("#add_error").show();
+              }
+            }
+          });
+        });
+
+        $("#add_cancel").click(function() {
+          $("#add_uname").val("");
+          $("#fade").hide();
+          $("#add_popup").hide();
+          $("#add_error").hide();
+        });
+        
+        $("#quit_project").click(function() {
+          $("#fade").show();
+          $("#quit_popup").show();
+        });
+
+        $("#quit_submit").click(function() {
+          if ($("#quit_verify").val() === viewed_project) {
+            $.ajax({
+              url: "/quit_project",
+              data: {
+                uname: localStorage["SRP_UNAME"],
+                project: JSON.stringify(encrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), viewed_project))
+              },
+              dataType: "json",
+              success: function(data) {
+                if (data.success) location.reload();
+                else {
+                  $("#quit_error").show();
+                }
+              }
+            });
+          }
+          else {
+            $("#quit_verify_error").show();
+          }
+        });
+        $("#quit_cancel").click(function() {
+          $("#quit_verify").val("");
+          $("#fade").hide();
+          $("#quit_popup").hide();
+          $("#quit_verify_error").hide();
+        });
+      });
+    </script>
+    <style>
+      div.chart {
+        margin:20px;
+      }
+      div.blue_list {
+        padding-left:10px;
+      }
+      div.blue_list_item {
+        color:#2C3E50;
+        text-transform:uppercase;
+        font-size:13px;
+        text-decoration:none;
+        padding-top:2px;
+        padding-bottom:2px;
+      }
+      div#add_team_member span, div#quit_project span {
+        cursor:pointer;
+        transition:color 0.3s;
+      }
+      div#add_team_member span:hover, div#quit_project span:hover {
+        color:#C00;
+      }
+      div#right_body {
+        padding:20px;
+      }
+      div#fade {
+        position:absolute;
+        top:0;
+        bottom:0;
+        left:0;
+        right:0;
+        background:rgba(100, 100, 100, 0.7);
+        display:none;
+      }
+      div.popup {
+        position:absolute;
+        top:50%;
+        bottom:50%;
+        left:50%;
+        right:50%;
+        margin-left: -200px;
+        width:400px;
+        border: 1px solid #888;
+        box-shadow: 0 0 10px #000;
+        background: #fff;
+        display:none;
+      }
+      div#add_popup {
+        height:120px;
+        margin-top: -60px;
+      }
+      div#quit_popup {
+        height:170px;
+        margin-top:-85px;
+      }
+      div.initially_hidden {
+        display:none;
+      }
+      div.failure_record {
+        display:none;
+      }
+      input.invisible_checkbox:checked + div.failure_record {
+        display:block;
+      }
+      div.failure_record {
+        padding-left:10px;
+      }
+      pre {
+        font-family:monospace;
+        text-transform:none;
+        color:#000;
+        border:1px solid #888;
+        margin:10px;
+      }
+      span.failure_value {
+        color:#000;
+        padding-left:10px;
+        text-transform:none;
+        font-family:monospace;
+      }
+      div.failure_arrested {
+        color:#C00;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="top" class="blockish">
+      <div id="header">
+        <a href="/index.html">Exeter Computing Club</a>
+      </div>
+      <div id="links">
+        <div class="link">
+          <a href="#" id="logout">logout</a>
+        </div>
+        <div class="link">
+          <a href="#">dash</a>
+        </div>
+        <div class="link">
+          <a href="/about.html">about</a>
+        </div>
+        <div class="link">
+          <a href="https://github.com/Exeter">github</a>
+        </div>
+        <div class="link">
+          <a>moodle</a>
+        </div>
+      </div>
+    </div>
+    <div id="wrapper" class="blockish">
+      <div id="left_header" class="blockish blue_header">
+      </div>
+      <div id="left_body" class="blockish">
+        <div class="red_header">
+          My Projects
+        </div>
+        <div class="project_list">
+          <div id="inner_projects">
+          </div>
+          <div class="project">
+            <a id="request">+ Request more space<a/>
+          </div>
+        </div>
+        <div class="red_header">
+          Other Actions
+        </div>
+        <div class="project_list">
+          <div class="project">
+            <a href="/post.html">Post club news</a>
+          </div>
+          <div class="project">
+            <a href="/register.html">Invite server account</a>
+          </div>
+          <div class="project">
+            <a href="/pwchange.html">Change password</a>
+          </div>
+        </div>
+      </div>
+      <div id="right_header" class="blockish back_header">
+        <div class="initially_hidden">
+          Project 1
+        </div>
+      </div>
+      <div id="right_body" class="blockish">
+        <div class="initially_hidden">
+          <div class="blue_header">
+            Product Launch
+          </div>
+          <div class="section">
+            <div id="launch">
+              The server source differs from the latest github commit. <button class="field" style="margin-left:10px;">launch</button>
+            </div>
+            <div id="dontlaunch">
+              The server source is up to date.
+            </div>
+          </div>
+          <div class="blue_header">
+            Team
+          </div>
+          <div class="section">
+            <div class="blue_list">  
+              <div id="team_list">
+              </div>
+              <div class="blue_list_item" id="add_team_member">
+                <span>+ Add team member</span>
+              </div>
+              <div class="blue_list_item" id="quit_project">
+                <span>- Quit this project</span>
+              </div>
+            </div>
+          </div>
+          <div class="blue_header">
+            Failures
+          </div>
+          <div class="section" id="failures">
+            <div class="blue_list" id="failure_record_list">
+            </div>
+          </div>
+          <div class="blue_header">
+            Analytics
+          </div>
+          <div class="section">
+            <div class="blue_subheader">
+              By Endpoint
+            </div>
+            <div class="section">
+              <div id="endpoint_chart" class="chart">
+              </div>
+            </div>
+            <div class="blue_subheader">
+              By Url
+            </div>
+            <div class="section">
+              <div id="url_chart" class="chart">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="fade">
+    </div>
+    <div id="add_popup" class="popup">
+      <div class="red_header">
+        Add a team member to this project
+      </div>
+      <div class="field_wrapper">
+        <div class="field_name">
+          Username
+        </div>
+        <input class="field" id="add_uname"/>
+      </div>
+      <div class="field_wrapper">
+        <button class="field" id="add_submit">Add</button><button class="field" id="add_cancel" style="margin-left:5px;">Cancel</button><span class="error_message" style="display:none;" id="add_error">An error occurred</span>
+      </div>
+    </div>
+    <div id="quit_popup" class="popup">
+      <div class="red_header">
+        Quit this project
+      </div>
+      <div class="section">
+        Confirm your resignation by typing the name of this project:
+      </div>
+      <div class="field_wrapper">
+        <input class="field" id="quit_verify"/>
+      </div>
+      <div class="field_wrapper">
+        <button class="field" id="quit_submit">Quit</button><button class="field" id="quit_cancel" style="margin-left:5px;">Cancel</button><div class="error_message" style="display:none;" id="quit_verify_error">Project name does not match input</div>
+      </div>
+    </div>
+  </body>
+</html>

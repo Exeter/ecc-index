@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+  <!--
+    Copyright (c) 2013 Phillips Exeter Academy Computing Club
+    Created by Anthony Bau in 2013
+    
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright and creation notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+  -->
+  <head>
+    <link href='http://fonts.googleapis.com/css?family=Lato:300,400' rel='stylesheet' type='text/css'/>
+    <link href="/index/style.css" rel="stylesheet" type="text/css"/>
+    <script src="/jslib/rollups/aes.js"></script>
+    <script src="/jslib/rollups/md5.js"></script>
+    <script src="/jslib/rollups/sha512.js"></script>
+    <script src="/jslib/rollups/sha256.js"></script>
+    <script src="/jslib/BigInt.js"></script>
+    <script src="/jslib/jquery.min.js"></script>
+    <script src="/jslib/auth.js"></script>
+    <script>
+      $(function() {
+        var last, posts = 0, can_load_more = true;
+        $("#logout").click(function() {
+          $.ajax({
+            url:"/logout",
+            method:"GET",
+            data: {
+              "uname": localStorage["SRP_UNAME"],
+              "signature": JSON.stringify(encrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), "SRP_LOGOUT_COMMAND"))
+            },
+            dataType:"json",
+            success:function(data) {
+              if (data.success) {
+                delete localStorage["SRP_SESS_KEY"];
+                delete localStorage["SRP_UNAME"];
+                location.href = "/index.html"
+              }
+            }
+          })
+        });
+        if (localStorage.hasOwnProperty("SRP_UNAME") && localStorage.hasOwnProperty("SRP_SESS_KEY")) {
+          $("#login_wrapper").hide();
+          $("#logout_wrapper").show();
+          $("#dashboard_wrapper").show();
+        }
+        function loadMorePosts() {
+          if (can_load_more) {
+            $.ajax({
+              url:"/index/news",
+              dataType:"json",
+              data: (last ? {
+                "last": last
+              } : {}),
+              success:function(data) {
+                var news = $("#news");
+                for (var i = 0; i < data.posts.length; i += 1) {
+                  news.append($("<div>")
+                    .addClass("news_post")
+                    .append($("<label>")
+                      .addClass("invisible_checkbox_label")
+                      .append($("<input>").attr("type", "checkbox").addClass("collapser"))
+                      .append($("<div>").addClass("news_title").addClass("blue_header").html(data.posts[i].title))
+                      .append($("<div>").addClass("news_body").addClass("collapsible").html(data.posts[i].body))));
+                  posts += 1;
+                }
+                last = data.last;
+                if (data.posts.length > 0) can_load_more = true;
+              },
+              error:function(data, b, c) {
+                console.log(data, b, c);
+                $("#news").append("<div class=\"error_message\">There was an error loading news posts.</div>");
+              }
+            });
+            can_load_more = false;
+          }
+        }
+        loadMorePosts();
+        $("#right_body").scroll(function() {
+          if ($(this).scrollTop() >= $("#news").height() - $(this).height() - 50) {
+            loadMorePosts();
+          }
+        });
+        $.ajax({
+          url:"/index/projects",
+          dataType:"json",
+          success:function(data) {
+            var github = $("#github");
+            for (var i =0; i < data.projects.length; i += 1) {
+              github.append($("<div>").addClass("project").append($("<a>").attr("href", data.projects[i].url).text(data.projects[i].name)))
+            }
+          }
+        });
+      });
+    </script>
+  </head>
+  <body>
+  <div id="top" class="blockish">
+    <div id="header">
+      <a href="/index.html">Exeter Computing Club</a>
+    </div>
+    <div id="links">
+      <div class="link" id="login_wrapper">
+        <a href="/login.html">login</a>
+      </div>
+      <div class="link" id="logout_wrapper" style="display:none;">
+        <a href="#" id="logout">logout</a>
+      </div>
+      <div class="link" id="dashboard_wrapper" style="display:none;">
+        <a href="/dashboard.html" id="logout">dash</a>
+      </div>
+      <div class="link">
+        <a href="/about.html">about</a>
+      </div>
+      <div class="link">
+        <a href="https://github.com/Exeter">github</a>
+      </div>
+      <div class="link">
+        <a>moodle</a>
+      </div>
+    </div>
+  </div>
+  <div id="wrapper" class="blockish">
+    <div id="left_header" class="blockish">
+      Projects
+    </div>
+    <div id="left_body" class="blockish">
+      <div class="red_header">
+        Github
+      </div>
+      <div id="github" class="project_list">
+      </div>
+      <div class="red_header">
+        This Server
+      </div>
+    </div>
+    <div id="right_header" class="blockish">
+      <div class="back_header">
+        Club News
+      </div>
+    </div>
+    <div id="right_body" class="blockish">
+      <div id="news">
+      </div>
+    </div>
+  </div>
+  </body>
+</html>

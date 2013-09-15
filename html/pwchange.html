@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link href='http://fonts.googleapis.com/css?family=Lato:300,400' rel='stylesheet' type='text/css'/>
+    <link href="/index/style.css" rel="stylesheet" type="text/css"/>
+    <script src="/jslib/rollups/aes.js"></script>
+    <script src="/jslib/rollups/md5.js"></script>
+    <script src="/jslib/rollups/sha512.js"></script>
+    <script src="/jslib/rollups/sha256.js"></script>
+    <script src="/jslib/BigInt.js"></script>
+    <script src="/jslib/auth.js"></script>
+    <script src="/jslib/jquery.min.js"></script>
+    <script>
+      $(function() {
+        if (!(localStorage["SRP_UNAME"] && localStorage["SRP_SESS_KEY"])) {
+          location.href = "/login.html";
+        }
+        $("#logout").click(function() {
+          $.ajax({
+            url:"/logout",
+            method:"GET",
+            data: {
+              "uname": localStorage["SRP_UNAME"],
+              "signature": JSON.stringify(encrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), "SRP_LOGOUT_COMMAND"))
+            },
+            dataType:"json",
+            success:function(data) {
+              if (data.success) {
+                delete localStorage["SRP_SESS_KEY"];
+                delete localStorage["SRP_UNAME"];
+                location.href = "/index.html"
+              }
+            }
+          })
+        });
+
+        $("#create").click(function() {
+          $("#server_error").hide();
+          $("#do_not_match").hide();
+          $("#error").hide();
+          var pass = $("#password").val(), verifier;
+          if ($("#confirm").val() != pass) {
+            $("#do_not_match").show();
+            $("#confirm").focus();
+            return;
+          }
+          else {
+            verifier = getVerifier(pass);
+            $.ajax({
+              url:"/pwchange",
+              method:"GET",
+              data:{
+                "info": JSON.stringify(encrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), JSON.stringify({
+                  "verifier": bigInt2str(verifier.v, 16),
+                  "salt": bigInt2str(verifier.s, 16), 
+                }))),
+                "uname": localStorage["SRP_UNAME"]
+              },
+              dataType:"json",
+              success: function(data) {
+                data = JSON.parse(decrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), data));
+                if (data.success) {
+                  location.href = "/dashboard.html"
+                }
+                else {
+                  $("#server_error").show();
+                }
+              }
+            });
+          }
+        });
+      });
+    </script>
+    <style>
+      div.error_message {
+        display:inline-block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="top" class="blockish">
+      <div id="header">
+        <a href="/index.html">Exeter Computing Club</a>
+      </div>
+      <div id="links">
+        <div class="link">
+          <a href="#" id="logout">logout</a>
+        </div>
+        <div class="link">
+          <a href="/dashboard.html">dash</a>
+        </div>
+        <div class="link">
+          <a href="/about.html">about</a>
+        </div>
+        <div class="link">
+          <a href="https://github.com/Exeter">github</a>
+        </div>
+        <div class="link">
+          <a>moodle</a>
+        </div>
+      </div>
+    </div>
+    <div id="wrapper" class="blockish">
+      <div id="left_header" class="blockish blue_header">
+      </div>
+      <div id="left_body" class="blockish">
+        <div class="project_list">
+          <div class="project">
+            <a href="/dashboard.html">Return to dashboard</a>
+          </div>
+        </div>
+      </div>
+      <div id="right_header" class="blockish back_header">
+        Change Password
+      </div>
+      <div id="right_body" class="blockish">
+        <div class="field_wrapper">
+          <div class="field_name">
+            Password
+          </div>
+          <input id="password" class="field" type="password">
+        </div>
+        <div class="field_wrapper">
+          <div class="field_name">
+            Confirm
+          </div>
+          <input id="confirm" class="field" type="password">
+          <div class="error_message" id="do_not_match" style="display:none;">
+            Password fields do not match
+          </div>
+        </div>
+        <div class="error_message" id="server_error" style="display:none">
+          An error occurred
+        </div>
+        <div class="field_wrapper">
+          <button id="create" class="field">Change</button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

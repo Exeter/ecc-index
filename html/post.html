@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <link href='http://fonts.googleapis.com/css?family=Lato:300,400' rel='stylesheet' type='text/css'/>
+    <link href="/index/style.css" rel="stylesheet" type="text/css"/>
+    <script src="/jslib/rollups/aes.js"></script>
+    <script src="/jslib/rollups/md5.js"></script>
+    <script src="/jslib/rollups/sha512.js"></script>
+    <script src="/jslib/rollups/sha256.js"></script>
+    <script src="/jslib/BigInt.js"></script>
+    <script src="/jslib/auth.js"></script>
+    <script src="/jslib/jquery.min.js"></script>
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    <script src="https://rawgithub.com/ajaxorg/ace-builds/master/src-noconflict/ace.js" type="text/javascript" charset="utf-8"></script>
+    <script>
+      $(function() {
+        if (!(localStorage["SRP_UNAME"] && localStorage["SRP_SESS_KEY"])) {
+          location.href = "/login.html";
+        }
+        $("#logout").click(function() {
+          $.ajax({
+            url:"/logout",
+            method:"GET",
+            data: {
+              "uname": localStorage["SRP_UNAME"],
+              "signature": JSON.stringify(encrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), "SRP_LOGOUT_COMMAND"))
+            },
+            dataType:"json",
+            success:function(data) {
+              if (data.success) {
+                delete localStorage["SRP_SESS_KEY"];
+                delete localStorage["SRP_UNAME"];
+                location.href = "/index.html"
+              }
+            }
+          })
+        });
+
+        var editor = ace.edit("editor");
+        editor.setTheme("ace/theme/monokai");
+        editor.getSession().setMode("ace/mode/html");
+        
+        function getCookie(key) {
+          var start = document.cookie.indexOf(" " + key + "=") + 2 + key.length, end;
+          if (start < 2 + key.length) start = document.cookie.indexOf(key + "=") + 1 + key.length;
+          if (start < 1 + key.length) return null;
+          else {
+            end = document.cookie.indexOf(";", start);
+            if (end < 0) end = document.cookie.length;
+            return unescape(document.cookie.substring(start, end));
+          }
+        }
+
+        $("#post").click(function() {
+          $.ajax({
+            url: "/index/post_news?uname=" + encodeURIComponent(localStorage["SRP_UNAME"]),
+            method: "POST",
+            data: {
+              //TODO everywhere stop fetching cookies when you need them; do it at the beginning of the script.
+              "info": JSON.stringify(encrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), JSON.stringify({
+                "title": $("#title").val(),
+                "body": editor.getSession().getValue()
+              })))
+            },
+            dataType: "json",
+            success:function(data) {
+              if (!data.error) {
+                data = JSON.parse(decrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), data));
+                if (data.success) {
+                  location.href = "/dashboard.html";
+                }
+              }
+            }
+          });
+        });
+      });
+    </script>
+    <style>
+      div#editor {
+        position:absolute;
+        top:0;
+        bottom:0;
+        left:0;
+        right:0;
+      }
+      input#title {
+        height:30px;
+        font-size:20px;
+        color:#2C3E50;
+        font-weight:lighter;
+        line-height:30px;
+        background:none;
+        border:none;
+        outline:none;
+        width:500px;
+        text-transform:uppercase;
+      }
+      div#right_header {
+        vertical-align: middle;
+        height:29px;
+        border-bottom:1px solid #888;
+      }
+      button#post {
+        position:absolute;
+        right:5px;
+        height:25px;
+        top:50%;
+        bottom:50%;
+        margin-top:-12.5px;
+      }
+    </style>
+  </html>
+  <body>
+    <div id="top" class="blockish">
+      <div id="header">
+        <a href="/index.html">Exeter Computing Club</a>
+      </div>
+      <div id="links">
+        <div class="link">
+          <a href="#" id="logout">logout</a>
+        </div>
+        <div class="link">
+          <a href="/dashboard.html">dash</a>
+        </div>
+        <div class="link">
+          <a href="/about.html">about</a>
+        </div>
+        <div class="link">
+          <a href="https://github.com/Exeter">github</a>
+        </div>
+        <div class="link">
+          <a>moodle</a>
+        </div>
+      </div>
+    </div>
+    <div id="wrapper" class="blockish">
+      <div id="left_header" class="blockish back_header">
+        Other Actions
+      </div>
+      <div id="left_body" class="blockish">
+        <div class="project_list">
+          <div class="project">
+            <a href="/dashboard.html">Return to dashboard</a>
+          </div>
+        </div>
+      </div>
+      <div id="right_header" class="blockish blue_header">
+        <input value="Untitled Post" id="title"/>
+        <button class="field" id="post" style="float:right;">Post</button>
+      </div>
+      <div id="right_body" class="blockish">
+        <div id="editor"></div>
+      </div>
+    </div>
+  </body>
+</html>
