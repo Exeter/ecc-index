@@ -750,11 +750,12 @@ static int run_static(request_rec *r, const char *filename) {
 
   //Find the extension:
   char extension[20];
-  char *dot_ptr = strrchr(filename, '.') + 1;
+  char *dot_ptr = strrchr(filename, '.');
   char *mimetype;
 
   //If there is an extension, find out what it means:
   if (dot_ptr != NULL) {
+    ++dot_ptr; //We don't actually want the dot itself
     int ext_len = filename + strlen(filename) - dot_ptr;
     memcpy(extension, dot_ptr, ext_len);
     extension[ext_len] = 0;
