@@ -1,11 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 import sqlite3
 import simplejson as json
 import os
 
 if __name__=="__main__":
-  conn = sqlite3.connect("/home/anthony/ecc-index/db/projects.db")
-  uconn = sqlite3.connect("/home/anthony/ecc-index/db/users.db")
+  conn = sqlite3.connect("/home/daemon/ecc-index/db/projects.db")
+  uconn = sqlite3.connect("/home/daemon/ecc-index/db/users.db")
   c = conn.cursor()
   u = uconn.cursor()
   c.execute("""

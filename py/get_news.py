@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 import sqlite3
 import simplejson as json
 import os
@@ -14,7 +14,7 @@ if __name__ == "__main__":
   for key in qwargs:
     qwargs[key] = qwargs[key][0]
 
-  conn = sqlite3.connect("/home/anthony/ecc-index/db/news.db")
+  conn = sqlite3.connect("/home/daemon/ecc-index/db/news.db")
   c = conn.cursor()
   virtual_last = int(float(qwargs["last"]) if "last" in qwargs else time.time())
 

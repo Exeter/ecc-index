@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 import sqlite3
 import simplejson as json
 import os
@@ -29,7 +29,7 @@ if __name__ == "__main__":
   for key in pargs:
     pargs[key] = pargs[key][0]
 
-  nconn = sqlite3.connect("/home/anthony/ecc-index/db/news.db")
+  nconn = sqlite3.connect("/home/daemon/ecc-index/db/news.db")
   n = nconn.cursor()
 
   #Make sure that this table exists
@@ -38,7 +38,7 @@ if __name__ == "__main__":
   """)
 
   #Connect to the users database
-  uconn = auth.initDB("/home/anthony/ecc-index/db/users.db")
+  uconn = auth.initDB("/home/daemon/ecc-index/db/users.db")
   
   #Create the session key table if it's not there yet, and delete any old session keys
   u = uconn.cursor()

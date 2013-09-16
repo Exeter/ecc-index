@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 import httplib
 import simplejson
 import datetime
@@ -74,7 +74,7 @@ if __name__ == "__main__":
         "commits": commit_list
       })
   if len(final) > 0:
-    conn = sqlite3.connect("/home/anthony/ecc-index/db/news.db")
+    conn = sqlite3.connect("/home/daemon/ecc-index/db/news.db")
     cur = conn.cursor()
     cur.execute("INSERT INTO news (timestamp, title, body) VALUES (?, 'Github Commits %s', ?)" % time.strftime("%b %d"), (time.time(), format_post(final)))
     conn.commit()

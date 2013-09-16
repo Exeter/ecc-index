@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 import urlparse
 import base64
 import auth
@@ -14,7 +14,7 @@ if __name__ == "__main__":
   for key in qwargs:
     qwargs[key] = qwargs[key][0]
 
-  uconn = auth.initDB("/home/anthony/ecc-index/db/users.db")
+  uconn = auth.initDB("/home/daemon/ecc-index/db/users.db")
   u = uconn.cursor()
 
   u.execute("""

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 """
   Functions implementing the SRP protocol, compatible with associated JavaScript library auth.js (should be packaged with this)
   
@@ -191,7 +191,6 @@ def decrypt(key, json_message):
   encrypter = AES.new(key, AES.MODE_CBC, iv)
   decrypted = encrypter.decrypt(message_text)[:message["length"]]
   checksum =  hashlib.md5(decrypted).hexdigest().upper()
-  print "Checksum: %s" % checksum
   if (checksum == message["checksum"]):
     return decrypted
   else:

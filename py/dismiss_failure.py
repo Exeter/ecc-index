@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 import httplib
 import urlparse
 import os
@@ -21,7 +21,7 @@ if __name__ == "__main__":
     qwargs[key] = qwargs[key][0]
 
   # Connect to the projects database
-  conn = sqlite3.connect("/home/anthony/ecc-index/db/projects.db")
+  conn = sqlite3.connect("/home/daemon/ecc-index/db/projects.db")
   c = conn.cursor()
 
   # Make sure that the projects table exists
@@ -30,7 +30,7 @@ if __name__ == "__main__":
   """)
   
   # Get this user's session key
-  kconn = auth.initDB("/home/anthony/ecc-index/db/users.db")
+  kconn = auth.initDB("/home/daemon/ecc-index/db/users.db")
   k = kconn.cursor()
   k.execute("""
     SELECT * FROM keys WHERE uname=?

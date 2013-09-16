@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 import os
 import sys
 import urlparse
@@ -16,7 +16,7 @@ if __name__ == "__main__":
     qwargs[key] = qwargs[key][0]
   
   #Connect to the users database
-  conn = auth.initDB("/home/anthony/ecc-index/db/users.db")
+  conn = auth.initDB("/home/daemon/ecc-index/db/users.db")
   
   #Create the session key table if it's not there yet, and delete any old session keys
   c = conn.cursor()
@@ -28,9 +28,7 @@ if __name__ == "__main__":
   
   print "Content-Type: application/json"
   print ""
-  
-  sys.stderr = sys.stdout
-  
+
   decrypted = auth.decrypt(key, qwargs["message"])
 
   if decrypted == "SRP_CLIENT_SUCCESS_MESSAGE":

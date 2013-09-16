@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 import sqlite3
 import auth
 import urlparse
@@ -16,7 +16,7 @@ if __name__ == "__main__":
   for key in qwargs:
     qwargs[key] = qwargs[key][0]
   
-  conn = auth.initDB("/home/anthony/ecc-index/db/users.db")
+  conn = auth.initDB("/home/daemon/ecc-index/db/users.db")
   c = conn.cursor()
   
   c.execute("""

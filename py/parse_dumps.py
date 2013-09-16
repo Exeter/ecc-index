@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 import sqlite3
 import os
 import re
@@ -26,7 +26,7 @@ if __name__ == "__main__":
   loaded = {}
   
   # Open our database connections
-  conn = sqlite3.connect("/home/anthony/ecc-index/db/projects.db")
+  conn = sqlite3.connect("/home/daemon/ecc-index/db/projects.db")
   c = conn.cursor()
 
   # Ensure that the wanted table exists
