@@ -761,7 +761,7 @@ static int run_static(request_rec *r, const char *filename) {
     mimetype = findMime(extension);
   }
   //Otherwise assume it's text/plain:
-  else mimetype = "text/plain"
+  else mimetype = "text/plain";
 
 #ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "File extension is %s. Thus mimeType is %s.\n", extension, mimetype);
