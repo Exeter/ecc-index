@@ -20,6 +20,8 @@
 \/projectlist /home/daemon/ecc-index/py/my_projects.py DYNAMIC
 \/invite_team /home/daemon/ecc-index/py/add_to_project.py DYNAMIC
 \/quit_project /home/daemon/ecc-index/py/quit_project.py DYNAMIC
+\/ace-builds\/(.*) /home/daemon/ecc-index/ace-builds/\1 STATIC
+\/favicon.ico /home/daemon/ecc-index/favicon.ico STATIC
 # --------
 # Debugging
 # These are just to test the failure handling functions

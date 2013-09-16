@@ -212,7 +212,7 @@ input.invisible_checkbox:checked + div.news_body {
   display:none;
 }
 */
-input.collapser, div.collapsible {
+input.collapser  {
   display: none;
 }
 label.collapsible_label {
