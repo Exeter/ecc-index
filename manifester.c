@@ -770,6 +770,7 @@ static int run_static(request_rec* r, const char* filename) {
 #ifdef MANIFEST_DEBUG_MODE
     fprintf(DEBUG, "Error opening file: %s\n", strerror(errno));
     if (errno == 13) return HTTP_FORBIDDEN;
+    else if (errno == 2) return HTTP_NOT_FOUND;
     else return HTTP_INTERNAL_SERVER_ERROR;
 #endif
   }
