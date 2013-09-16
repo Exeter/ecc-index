@@ -219,7 +219,7 @@ label.collapsible_label {
   cursor: pointer;
 }
 input.collapser:checked ~ div.collapsible {
-  display: block;
+  display: none;
 }
 div.about_body {
   padding-left:10px;
