@@ -59,16 +59,16 @@
 #define DEFAULT_DOS_BUCKET_SIZE 30
 
 //Debugging file:
-FILE* DEBUG;
+FILE *DEBUG;
 
 //Failure log:
-FILE* FAILURE_LOG;
+FILE *FAILURE_LOG;
 
 //Access log:
-FILE* ACCESS_LOG;
+FILE *ACCESS_LOG;
 
 //Error log:
-FILE* ERROR_LOG;
+FILE *ERROR_LOG;
 
 /*
   THE LOG OF DAMNATNION
@@ -76,7 +76,7 @@ FILE* ERROR_LOG;
 
     Basically for IP addresses who try to abuse our HTTP server.
 */
-FILE* LOG_OF_DAMNATION;
+FILE *LOG_OF_DAMNATION;
 
 /*========================
  * HIT LIST FUNCTIONS for caching and DOS evasion
@@ -87,12 +87,12 @@ struct hit_list_node;
 typedef struct hit_list_node hit_list_node;
 
 struct hit_list_node {
-  char* key;
+  char *key;
   int value;
-  hit_list_node* next;
+  hit_list_node *next;
 };
 
-int hash(const char* string, int modulo) {
+int hash(const char *string, int modulo) {
   int r = 0;
   for (int i = 0; string[i] != '\0'; ++i) {
     r = (r * 31 + string[i]) % modulo;
@@ -101,12 +101,12 @@ int hash(const char* string, int modulo) {
 }
 
 typedef struct {
-  hit_list_node** buckets;
+  hit_list_node* *buckets;
   int size;
   time_t last_cleared;
 } hit_list;
 
-static void hit_list_clear(hit_list* map) {
+static void hit_list_clear(hit_list *map) {
 #ifdef MANIFEST_DEBUG_MODE
   fputs("Clearing a hit list.\n", DEBUG);
   fflush(DEBUG);
@@ -114,11 +114,11 @@ static void hit_list_clear(hit_list* map) {
 
   int size = map->size;
   for (int i = 0; i < size; ++i) {
-    hit_list_node* head = map->buckets[i];
+    hit_list_node *head = map->buckets[i];
     if (head == NULL) continue;
     else {
       //Free every element here:
-      hit_list_node* foot = head->next;
+      hit_list_node *foot = head->next;
       do {
         free(head->key);
         free(head);
@@ -134,7 +134,7 @@ static void hit_list_clear(hit_list* map) {
   }
 }
 
-static int hit_list_increment(hit_list* map, const char* key, int clear_freq) {
+static int hit_list_increment(hit_list *map, const char *key, int clear_freq) {
   //If it's time to refresh, do so and automatically clear this requester:
   if (difftime(time(NULL), map->last_cleared) > clear_freq) {
     hit_list_clear(map);
@@ -142,12 +142,12 @@ static int hit_list_increment(hit_list* map, const char* key, int clear_freq) {
   }
 
   int incorrect = 0, index;
-  hit_list_node* head = map->buckets[(index = hash(key, map->size))];
+  hit_list_node *head = map->buckets[(index = hash(key, map->size))];
 
   //If there is nothing in this bucket yet, put something there:
   if (head == 0) {
     //Make a new element:
-    hit_list_node* new_element = (hit_list_node*) malloc (sizeof(hit_list_node));
+    hit_list_node *new_element = (hit_list_node*) malloc (sizeof(hit_list_node));
     
     //Fill the new element in with the correct values:
     new_element->key = strdup(key);
@@ -206,18 +206,18 @@ struct hashmap_node;
 typedef struct hashmap_node hashmap_node;
 
 struct hashmap_node {
-  char* key;
-  void* value;
-  hashmap_node* next;
+  char *key;
+  void *value;
+  hashmap_node *next;
 };
 
 typedef struct {
-  hashmap_node** buckets;
+  hashmap_node* *buckets;
   int size;
   time_t last_cleared;
 } hashmap;
 
-static void hashmap_clear(hashmap* map) {
+static void hashmap_clear(hashmap *map) {
 #ifdef MANIFEST_DEBUG_MODE
   fputs("Clearing a hashmap.\n", DEBUG);
   fflush(DEBUG);
@@ -225,11 +225,11 @@ static void hashmap_clear(hashmap* map) {
 
   int size = map->size;
   for (int i = 0; i < size; ++i) {
-    hashmap_node* head = map->buckets[i];
+    hashmap_node *head = map->buckets[i];
     if (head == NULL) continue;
     else {
       //Free every element here:
-      hashmap_node* foot = head->next;
+      hashmap_node *foot = head->next;
       while (foot != NULL) {
         free(head->key);
         free(head);
@@ -241,8 +241,8 @@ static void hashmap_clear(hashmap* map) {
   }
 }
 
-static int hashmap_contains(hashmap* map, char* key) {
-  hashmap_node* head = map->buckets[hash(key, map->size)];
+static int hashmap_contains(hashmap *map, char *key) {
+  hashmap_node *head = map->buckets[hash(key, map->size)];
   while (head != NULL) {
     if (strcmp(head->key, key) == 0) return 1;
     head = head->next;
@@ -250,12 +250,12 @@ static int hashmap_contains(hashmap* map, char* key) {
   return 0;
 }
 
-static void* hashmap_get(hashmap* map, const char* key) {
+static void *hashmap_get(hashmap *map, const char *key) {
 #ifdef MANIFEST_DEBUG_MODE
   fputs("Starting hashmap_get.\n", DEBUG);
   fflush(DEBUG);
 #endif
-  hashmap_node* head = map->buckets[hash(key, map->size)];
+  hashmap_node *head = map->buckets[hash(key, map->size)];
   while (head != NULL && strcmp(head->key, key)) head = head->next;
 #ifdef MANIFEST_DEBUG_MODE
   fputs("Found the proper head value.\n", DEBUG);
@@ -271,17 +271,17 @@ static void* hashmap_get(hashmap* map, const char* key) {
   }
 }
 
-static void hashmap_set(hashmap* map, const char* key, void* value) {
+static void hashmap_set(hashmap *map, const char *key, void *value) {
 #ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "Setting hashmap %p value %s to %p\n", map, key, value);
   fflush(DEBUG);
 #endif
   int index, incorrect = 1;
-  hashmap_node* head = map->buckets[(index = hash(key, map->size))];
+  hashmap_node *head = map->buckets[(index = hash(key, map->size))];
   if (head != NULL) while (head->next != NULL && (incorrect = strcmp(head->key, key))) head = head->next;
   if (incorrect) {
     //Create and a new node.
-    hashmap_node* new_el = (hashmap_node*) malloc (sizeof(hashmap_node));
+    hashmap_node *new_el = (hashmap_node*) malloc (sizeof(hashmap_node));
     new_el->key = strdup(key);
     new_el->value = value;
     new_el->next = NULL;
@@ -303,19 +303,19 @@ static void hashmap_set(hashmap* map, const char* key, void* value) {
 //Represents something to execute:
 typedef struct {
   int disposition;
-  char* file;
+  char *file;
 } manifest_command;
 
 //Represents a static file for reading:
 typedef struct {
-  FILE* file;
-  char* mimetype;
+  FILE *file;
+  char *mimetype;
   int size;
 } static_file_record;
 
 typedef struct {
-  char* text;
-  char* mimetype;
+  char *text;
+  char *mimetype;
   int size;
 } static_file_total;
 
@@ -345,11 +345,11 @@ static hashmap * file_text_cache; //ALL VALUE TYPES SHOULD BE (char*)
  * SERVER TOOLS
  *=================*/
 
-char* findMime(const char* ext) {
-  FILE* mimetypes = fopen("/srv/http/conf/mime.types", "r"); //TODO this should be loaded ONCE and served thereafter from RAM.
+char *findMime(const char *ext) {
+  FILE *mimetypes = fopen("/srv/http/conf/mime.types", "r"); //TODO this should be loaded ONCE and served thereafter from RAM.
   if (mimetypes != NULL) {
     int nbytes = 100;
-    char* line = (char*) malloc (100 * sizeof(char));
+    char *line = (char*) malloc (100 * sizeof(char));
 
     while (getline(&line, (size_t*) &nbytes, mimetypes) > 0) {
       //Parse a single line.
@@ -358,7 +358,7 @@ char* findMime(const char* ext) {
       if (line[0] == '#') continue;
 
       //Otherwise, continue until we see whitespace:
-      char* mimetype = (char*) malloc (100 * sizeof(char));
+      char *mimetype = (char*) malloc (100 * sizeof(char));
       int i = 0;
       for (; line[i] != '\t' && line[i] != '\n'; ++i) {
         mimetype[i] = line[i];
@@ -408,7 +408,7 @@ char* findMime(const char* ext) {
   }
 }
 
-static int util_read (request_rec* r, const char** rbuf, apr_off_t* size) {
+static int util_read (request_rec *r, const char* *rbuf, apr_off_t *size) {
   int rc = OK;
 
   if ((rc = ap_setup_client_block(r, REQUEST_CHUNKED_ERROR)) != OK) {
@@ -446,7 +446,7 @@ static int util_read (request_rec* r, const char** rbuf, apr_off_t* size) {
  * FILE RUNNING FUNCTIONS
  *===============*/
 
-static int run_dynamic(request_rec* r, const char* file) {
+static int run_dynamic(request_rec *r, const char *file) {
 #ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "Running %s dynamically.\n", file);
   fflush(DEBUG);
@@ -490,7 +490,7 @@ static int run_dynamic(request_rec* r, const char* file) {
     setenv("REQUEST_METHOD", r->method, 1);
 
     //Run the needed script.
-    char* nargs[] = {(char*) file, NULL};
+    char *nargs[] = {(char*) file, NULL};
     execvp(nargs[0], nargs);
   }
   else {
@@ -499,8 +499,8 @@ static int run_dynamic(request_rec* r, const char* file) {
     close(stdin_pipe[0]);
     close(stdout_pipe[1]);
 
-    const apr_array_header_t* fields;
-    apr_table_entry_t* e = 0;
+    const apr_array_header_t *fields;
+    apr_table_entry_t *e = 0;
 
     //Put out all the headers we got.
     fields = apr_table_elts(r->headers_in);
@@ -514,7 +514,7 @@ static int run_dynamic(request_rec* r, const char* file) {
     if (write(stdin_pipe[1], "\n", 1) < 0) return HTTP_INTERNAL_SERVER_ERROR;
     
     apr_off_t post_buf_size;
-    const char* post_buf;
+    const char *post_buf;
     if (strcmp("POST", r->method) == 0) {
       //Read off the post data:
       util_read (r, &post_buf, &post_buf_size);
@@ -688,7 +688,7 @@ static int run_dynamic(request_rec* r, const char* file) {
   }
 }
 
-static int run_static(request_rec* r, const char* filename) {
+static int run_static(request_rec *r, const char *filename) {
 #ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "Running static file %s.\n", filename);
   fflush(DEBUG);
@@ -696,8 +696,8 @@ static int run_static(request_rec* r, const char* filename) {
   
   //See if we are cached:
   int hit_list_result;
-  static_file_record* finfo;
-  static_file_total* t_finfo;
+  static_file_record *finfo;
+  static_file_total *t_finfo;
   if ((hit_list_result = hit_list_increment(file_access_record, filename, STATIC_FILE_CLEAR_FREQ)) >= FILE_PTR_CACHE_THRESHOLD) {
     if (hit_list_result >= FILE_TOTAL_CACHE_THRESHOLD && (t_finfo = (static_file_total*) hashmap_get(file_text_cache, filename)) != NULL) {
 #ifdef MANIFEST_DEBUG_MODE
@@ -720,7 +720,7 @@ static int run_static(request_rec* r, const char* filename) {
       //File descriptor cache hit.
       ap_set_content_type(r, finfo->mimetype);
       ap_set_content_length(r, finfo->size);
-      char* buf = (char*) malloc (finfo->size * sizeof(char));
+      char *buf = (char*) malloc (finfo->size * sizeof(char));
       int bytes_read = fread(buf, finfo->size, 1, finfo->file);
       rewind(finfo->file);
 #ifdef MANIFEST_DEBUG_MODE
@@ -750,11 +750,18 @@ static int run_static(request_rec* r, const char* filename) {
 
   //Find the extension:
   char extension[20];
-  char* dot_ptr = strrchr(filename, '.') + 1;
-  int ext_len = filename + strlen(filename) - dot_ptr;
-  memcpy(extension, dot_ptr, ext_len);
-  extension[ext_len] = 0;
-  char* mimetype = findMime(extension);
+  char *dot_ptr = strrchr(filename, '.') + 1;
+  char *mimetype;
+
+  //If there is an extension, find out what it means:
+  if (dot_ptr != NULL) {
+    int ext_len = filename + strlen(filename) - dot_ptr;
+    memcpy(extension, dot_ptr, ext_len);
+    extension[ext_len] = 0;
+    mimetype = findMime(extension);
+  }
+  //Otherwise assume it's text/plain:
+  else mimetype = "text/plain"
 
 #ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "File extension is %s. Thus mimeType is %s.\n", extension, mimetype);
@@ -764,7 +771,7 @@ static int run_static(request_rec* r, const char* filename) {
   //Set the mimetype to the proper value for this extension:
   ap_set_content_type(r, mimetype);
 
-  FILE* file = fopen(filename, "rb");
+  FILE *file = fopen(filename, "rb");
 
   if (file == NULL) {
 #ifdef MANIFEST_DEBUG_MODE
@@ -780,7 +787,7 @@ static int run_static(request_rec* r, const char* filename) {
   int size = ftell(file);
   rewind(file);
   
-  char* buffer = (char*) malloc (size * sizeof(char));
+  char *buffer = (char*) malloc (size * sizeof(char));
   int true_size = fread(buffer, size, 1, file);
   rewind(file);
 
@@ -818,7 +825,7 @@ static int run_static(request_rec* r, const char* filename) {
  * THE MANIFEST PARSER
  *================*/
 
-int matches(regmatch_t** backrefs, char* form, char* path, char* match) {
+int matches(regmatch_t* *backrefs, char *form, char *path, char *match) {
   regex_t compiled;
 
   //Count the number of backreferences needed
@@ -847,16 +854,16 @@ int matches(regmatch_t** backrefs, char* form, char* path, char* match) {
   }
 }
 
-const char* format(regmatch_t* backref, char* format, char* path) {
+const char *format(regmatch_t *backref, char *format, char *path) {
   //Allocate data for the return value:
-  char* result = (char*) malloc (FORMAT_RESULT_SIZE * sizeof(char));
+  char *result = (char*) malloc (FORMAT_RESULT_SIZE * sizeof(char));
   int mark = 0;
 
   for (int i = 0; format[i] != '\0'; ++i & ++mark) {
     if (format[i] == '\\' && isdigit(format[i + 1])) {
       //Get the requested backref index:
       int which = format[i + 1] - '0';
-      char* beg_ptr = path + backref[which].rm_so;
+      char *beg_ptr = path + backref[which].rm_so;
       int size = backref[which].rm_eo - backref[which].rm_so;
 
       fprintf(DEBUG, "Accessing backref %d.\n", which);
@@ -879,16 +886,16 @@ const char* format(regmatch_t* backref, char* format, char* path) {
   return result;
 }
 
-static int run_manifest(request_rec* r, const char* filename) {
+static int run_manifest(request_rec *r, const char *filename) {
 #ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "Running manifest file %s.\n", filename);
   fflush(DEBUG);
 #endif
   
-  FILE* f = fopen(filename, "r");
-  char* path = r->uri;
+  FILE *f = fopen(filename, "r");
+  char *path = r->uri;
   long unsigned int manifest_line = MANIFEST_LINE;
-  char* line = (char*) malloc (MANIFEST_LINE * sizeof(char));
+  char *line = (char*) malloc (MANIFEST_LINE * sizeof(char));
 
   while (getline(&line, &manifest_line, f) > 0) {
     //'#' is the comment character.
@@ -915,8 +922,8 @@ static int run_manifest(request_rec* r, const char* filename) {
 
     //Declare stuff
     int s = 0;
-    regmatch_t* backref;
-    char* new_file;
+    regmatch_t *backref;
+    char *new_file;
     
     //Assemble the format string:
     char form[100];
@@ -948,7 +955,7 @@ static int run_manifest(request_rec* r, const char* filename) {
       case 'D':
         //Cache this line:
         if (hit_list_increment(line_cache_record, r->uri, LINE_CACHE_CLEAR_FREQ) > LINE_CACHE_THRESHOLD && !hashmap_contains(line_cache, r->uri)) {
-          manifest_command* cached_command = (manifest_command*) malloc (sizeof(manifest_command));
+          manifest_command *cached_command = (manifest_command*) malloc (sizeof(manifest_command));
           cached_command->disposition = 1;
           cached_command->file = strdup(new_file);
           hashmap_set(line_cache, r->uri, (void*) cached_command);
@@ -958,7 +965,7 @@ static int run_manifest(request_rec* r, const char* filename) {
       default:
         //Cache this line:
         if (hit_list_increment(line_cache_record, r->uri, LINE_CACHE_CLEAR_FREQ) > LINE_CACHE_THRESHOLD && !hashmap_contains(line_cache, r->uri)) {
-          manifest_command* cached_command = (manifest_command*) malloc (sizeof(manifest_command));
+          manifest_command *cached_command = (manifest_command*) malloc (sizeof(manifest_command));
           cached_command->disposition = 0;
           cached_command->file = strdup(new_file);
           hashmap_set(line_cache, r->uri, (void*) cached_command);
@@ -976,16 +983,16 @@ static int run_manifest(request_rec* r, const char* filename) {
   return HTTP_NOT_FOUND;
 }
 
-hit_list* create_hit_list(int size) {
-  hit_list* new_hit_list = (hit_list *) malloc (sizeof(hit_list));
+hit_list *create_hit_list(int size) {
+  hit_list *new_hit_list = (hit_list *) malloc (sizeof(hit_list));
   new_hit_list->buckets = (hit_list_node **) calloc (DEFAULT_DOS_BUCKET_SIZE, sizeof(hit_list_node*));
   new_hit_list->size = DEFAULT_DOS_BUCKET_SIZE;
   new_hit_list->last_cleared = time(NULL);
   return new_hit_list;
 }
 
-hashmap* create_hashmap(int size) {
-  hashmap* new_hashmap = (hashmap *) malloc (sizeof(hashmap));
+hashmap *create_hashmap(int size) {
+  hashmap *new_hashmap = (hashmap *) malloc (sizeof(hashmap));
   new_hashmap->buckets = (hashmap_node**) calloc (size, sizeof(hashmap_node*));
   new_hashmap->size = size;
   new_hashmap->last_cleared = time(NULL);
@@ -996,7 +1003,7 @@ hashmap* create_hashmap(int size) {
  * APACHE REGISTRATON STUFF
  *=================*/
 
-static int manifester(request_rec* r) {
+static int manifester(request_rec *r) {
 #ifdef MANIFEST_DEBUG_MODE
   fprintf(DEBUG, "\nPID %d (name %s) handled request %s from %s.\n", getpid(), r->server->process->argv[0], r->uri, r->connection->client_ip);
   fflush(DEBUG);
@@ -1013,7 +1020,7 @@ static int manifester(request_rec* r) {
 #endif
 
   //REQUEST HANDLING STEP 2: CHECK CACHE HIT
-  manifest_command* cached_command;
+  manifest_command *cached_command;
   if ((cached_command = (manifest_command*) hashmap_get(line_cache, r->uri)) != NULL) {
     hit_list_increment(line_cache_record, r->uri, LINE_CACHE_CLEAR_FREQ); //Increase for record-keeping purposes
     return (cached_command->disposition == 0 ? run_static(r, cached_command->file) : (cached_command->disposition == 1 ? run_dynamic(r, cached_command->file) : HTTP_INTERNAL_SERVER_ERROR));
@@ -1028,7 +1035,7 @@ static int manifester(request_rec* r) {
   return run_manifest(r, "/srv/http/manifest.txt");
 }
 
-static void register_hooks(apr_pool_t* pool) { 
+static void register_hooks(apr_pool_t *pool) { 
 
 #ifdef MANIFEST_DEBUG_MODE
   DEBUG = fopen("/srv/http/logs/manifester.debug", "w");
