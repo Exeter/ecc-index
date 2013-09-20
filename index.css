@@ -214,6 +214,7 @@ input.invisible_checkbox:checked + div.news_body {
 */
 input.collapser  {
   display: none;
+  cursor: auto;
 }
 label.collapsible_label {
   cursor: pointer;
