@@ -217,6 +217,8 @@ input.collapser  {
 }
 label.collapsible_label {
   cursor: pointer;
+  height: 30px;
+  overflow: visible;
 }
 input.collapser:checked ~ div.collapsible {
   display: none;
