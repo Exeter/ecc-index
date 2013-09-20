@@ -110,7 +110,7 @@ div#right_body {
 }
 /*(end note)*/
 
-div.blue_header {
+div.blue_header, summary.blue_header {
   color:#2C3E50;
   font-size:20px;
   height:30px;
@@ -215,6 +215,14 @@ input.invisible_checkbox:checked + div.news_body {
 input.collapser  {
   display: none;
   cursor: auto;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+summary {
+  outline: none;
+  display: block;
+  cursor: pointer;
 }
 label.collapsible_label {
   cursor: pointer;

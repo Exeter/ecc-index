@@ -70,14 +70,16 @@
               success:function(data) {
                 var news = $("#news");
                 for (var i = 0; i < data.posts.length; i += 1) {
-                  news.append($("<div>")
+                  news.append($("<div>").append($("<details>")
+                    .attr("open", "")
                     .addClass("news_post")
-                    .append($("<label>")
-                      .addClass("invisible_checkbox_label")
-                      .append($("<input>").attr("type", "checkbox").addClass("collapser"))
-                      .append($("<div>").addClass("news_title").addClass("blue_header").html(data.posts[i].title))
-                      .append($("<div>").addClass("news_body").addClass("collapsible").html(data.posts[i].body).click(function(e) {e.preventDefault();return false;}))
-                    ));
+                    .append($("<summary>")
+                      .attr("open", true)
+                      .addClass("news_title")
+                      .addClass("blue_header")
+                      .html(data.posts[i].title)
+                    )
+                    .append($("<div>").addClass("news_body").html(data.posts[i].body))));
                   posts += 1;
                 }
                 last = data.last;
