@@ -76,7 +76,8 @@
                       .addClass("invisible_checkbox_label")
                       .append($("<input>").attr("type", "checkbox").addClass("collapser"))
                       .append($("<div>").addClass("news_title").addClass("blue_header").html(data.posts[i].title))
-                      .append($("<div>").addClass("news_body").addClass("collapsible").html(data.posts[i].body))));
+                      .append($("<div>").addClass("news_body").addClass("collapsible").html(data.posts[i].body).click(function() {return 0;}))
+                    ));
                   posts += 1;
                 }
                 last = data.last;
