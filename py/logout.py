@@ -41,12 +41,15 @@ if __name__ == "__main__":
         "success": True
       })
     else:
+      # The client's session key is already expired, so we do not log them out on the server.
+      # However, the client can feel safe that thier session key is no longer needed.
       print json.dumps({
-        "success": False,
-        "error": "DATA CORRUPTION"
+        "success": True,
+        "error": "NO KEY DELETED"
       })
   else:
+    # There is no server key to match the client one, so something has gone very wrong.
     print json.dumps({
       "success": False,
-      "error": "NO ESTABLISHED SESSKEY"
+      "error": "NO ESTABLISHED SESSKEY",
     })
