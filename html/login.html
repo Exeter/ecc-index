@@ -64,7 +64,7 @@
                     if (data.message != null && decrypt(kdict.K, JSON.parse(data.message)) == "SRP_SERVER_SUCCESS_MESSAGE") {
                       localStorage["SRP_SESS_KEY"] = kdict.K.toString(CryptoJS.enc.Base64);
                       localStorage["SRP_UNAME"] = uname;
-                      location.href = "/dashboard.html"
+                      location.href = "/dashboard.html";
                     }
                     else {
                       $("#incorrect").text("Incorrect username or password").css("display", "inline-block");

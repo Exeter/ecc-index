@@ -35,10 +35,14 @@
 
   function randInt(n) {
     if ("number" === typeof(n)) n = int2bigInt(n, 1, 1);
-    var val_array = crypto.getRandomValues(new Uint8Array(Math.ceil(bigInt2str(n, 16).length/2))), //Note: this radix-changing thing is quite hacky.
+    var val_array = new Uint8Array(Math.ceil(bigInt2str(n, 16).length/2)), //Note: this radix-changing thing is quite hacky.
         big256 = int2bigInt(256, 1, 1),
         compn = sub(n, int2bigInt(1, 1, 1)),
         random_number;
+    
+    //Fill val_array with entropy
+    crypto.getRandomValues(val_array);
+
     random_number = int2bigInt(0, 1, 1);
     for (var i = 0; i < val_array.length; i += 1) {
       random_number = mult(random_number, big256);
