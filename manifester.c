@@ -35,15 +35,16 @@
 #include "http_request.h"
 
 #define MANIFEST_DEBUG_MODE
+//#define QUICK_CLEAR
 #define DAMN_ABUSERS
 
 #define LINE_CACHE_BUCKET_SIZE 37
-#ifndef MANIFEST_DEBUG_MODE //Normal clear frequencies for production use
+#ifndef QUICK_CLEAR //Normal clear frequencies for production use
 #define LINE_CACHE_CLEAR_FREQ 3600
 #define STATIC_FILE_CLEAR_FREQ 3600
 #define BLACKLIST_CLEAR_FREQUENCY 3600
 #endif
-#ifdef MANIFEST_DEBUG_MODE //Insanely quick clear frequencies for debug use
+#ifdef QUICK_CLEAR //Insanely quick clear frequencies for debug use
 #define STATIC_FILE_CLEAR_FREQ 30
 #define LINE_CACHE_CLEAR_FREQ 30
 #define BLACKLIST_CLEAR_FREQUENCY 30
@@ -55,7 +56,7 @@
 #define MANIFEST_LINE 1000
 #define FORMAT_RESULT_SIZE 1000
 #define PATH_DESCRIPTOR_LENGTH 500
-#define BLACKLIST_THRESHOLD 720
+#define BLACKLIST_THRESHOLD 600
 #define DEFAULT_DOS_BUCKET_SIZE 30
 
 //Debugging file:
@@ -107,11 +108,6 @@ typedef struct {
 } hit_list;
 
 static void hit_list_clear(hit_list *map) {
-#ifdef MANIFEST_DEBUG_MODE
-  fputs("Clearing a hit list.\n", DEBUG);
-  fflush(DEBUG);
-#endif
-
   int size = map->size;
   for (int i = 0; i < size; ++i) {
     hit_list_node *head = map->buckets[i];
@@ -132,14 +128,18 @@ static void hit_list_clear(hit_list *map) {
       map->buckets[i] = NULL;
     }
   }
-  
-  //Update our last-cleared record.
+
+  //Update our last-cleared records
   map->last_cleared = time(NULL);
 }
 
 static int hit_list_increment(hit_list *map, const char *key, int clear_freq) {
   //If it's time to refresh, do so and automatically clear this requester:
   if (difftime(time(NULL), map->last_cleared) > clear_freq) {
+#ifdef MANIFEST_DEBUG_MODE
+  fprintf(DEBUG, "Clearing a hit list (%d -> %d with difference %f, which is > %d).\n", map->last_cleared, time(NULL), difftime(time(NULL), map->last_cleared), clear_freq);
+  fflush(DEBUG);
+#endif
     hit_list_clear(map);
     return 1;
   }

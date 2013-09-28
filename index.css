@@ -279,7 +279,8 @@ input.field:focus {
 button.field {
   background:#710001;
   color:#fff;
-  border:1px solid #888;
+  border-radius: 2px;
+  border: 1px solid transparent;
   height:25px;
   line-height:15px;
   padding:5px;
