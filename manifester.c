@@ -132,6 +132,9 @@ static void hit_list_clear(hit_list *map) {
       map->buckets[i] = NULL;
     }
   }
+  
+  //Update our last-cleared record.
+  map->last_cleared = time(NULL);
 }
 
 static int hit_list_increment(hit_list *map, const char *key, int clear_freq) {
