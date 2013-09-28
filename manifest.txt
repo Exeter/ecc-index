@@ -1,3 +1,6 @@
+# ECC server manifest document.
+
+# Landing Page
 \/index\.html /home/daemon/ecc-index/html/index.html STATIC
 \/about\.html /home/daemon/ecc-index/html/about.html STATIC
 \/login\.html /home/daemon/ecc-index/html/login.html STATIC
@@ -6,7 +9,8 @@
 \/post\.html /home/daemon/ecc-index/html/post.html STATIC
 \/pwchange\.html /home/daemon/ecc-index/html/pwchange.html STATIC
 \/index\/news /home/daemon/ecc-index/py/get_news.py DYNAMIC
-\/index\/projects /srv/http/github_projects.json STATIC
+\/index\/github_projects /srv/http/github_projects.json STATIC
+\/index\/server_projects /srv/http/server_projects.json STATIC
 \/index\/style\.css /home/daemon/ecc-index/index.css STATIC
 \/index/post_news /home/daemon/ecc-index/py/post_news.py DYNAMIC
 \/jslib\/(.*) /home/daemon/ecc-index/jslib/\1 STATIC
@@ -22,10 +26,8 @@
 \/quit_project /home/daemon/ecc-index/py/quit_project.py DYNAMIC
 \/ace-builds\/(.*) /home/daemon/ecc-index/vendor/ace-builds/\1 STATIC
 \/favicon.ico /home/daemon/ecc-index/favicon.ico STATIC
-# --------
-# Debugging
-# These are just to test the failure handling functions
-# --------
-\/fail /home/anthony/deliberate_failure.py DYNAMIC
-\/segfault /home/anthony/segfault.o DYNAMIC
-\/test\.html /home/daemon/ecc-index/html/test.html STATIC
+
+# Exeter Connected
+\/connected\/(.*) /home/daemon/connected/\1 STATIC
+\/connected\/ /home/daemon/connected/index.html STATIC
+\/connected /home/daemon/connected/index.html STATIC

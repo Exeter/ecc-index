@@ -100,12 +100,22 @@
           }
         });
         $.ajax({
-          url:"/index/projects",
+          url:"/index/github_projects",
           dataType:"json",
           success:function(data) {
             var github = $("#github");
             for (var i =0; i < data.projects.length; i += 1) {
               github.append($("<div>").addClass("project").append($("<a>").attr("href", data.projects[i].url).text(data.projects[i].name)))
+            }
+          }
+        });
+        $.ajax({
+          url:"/index/server_projects",
+          dataType:"json",
+          success:function(data) {
+            var server = $("#server");
+            for (var i =0; i < data.projects.length; i += 1) {
+              server.append($("<div>").addClass("project").append($("<a>").attr("href", data.projects[i].url).text(data.projects[i].name)))
             }
           }
         });
@@ -150,6 +160,8 @@
       </div>
       <div class="red_header">
         This Server
+      </div>
+      <div id="server" class="project_list">
       </div>
     </div>
     <div id="right_header" class="blockish">

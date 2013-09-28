@@ -899,8 +899,8 @@ static int run_manifest(request_rec *r, const char *filename) {
   char *line = (char*) malloc (MANIFEST_LINE * sizeof(char));
 
   while (getline(&line, &manifest_line, f) > 0) {
-    //'#' is the comment character.
-    if (line[0] == '#') continue;
+    //Skip comments and empty lines
+    if (line[0] == '#' || line[0] == '\n') continue;
 
     //'--CRON--' is the marker for the start of cron jobs:
     if (strcmp(line, "--CRON--\n") == 0) break;
