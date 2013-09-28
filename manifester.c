@@ -1015,9 +1015,13 @@ static int manifester(request_rec *r) {
 
 
   //REQUEST HANDLING STEP 1: DOS EVASION
-  if (hit_list_increment(server_hit_list, r->connection->client_ip, BLACKLIST_CLEAR_FREQUENCY) > BLACKLIST_THRESHOLD) {
-    return HTTP_FORBIDDEN;
+  int hits = hit_list_increment(server_hit_list, r->connection->client_ip, BLACKLIST_CLEAR_FREQUENCY);
+
+  if (hits > BLACKLIST_THRESHOLD) return HTTP_FORBIDDEN;
+  else if (hits == BLACKLIST_THRESHOLD) {
+    fprintf(LOG_OF_DAMNATION, "%s\n", r->connection->client_ip);
   }
+
 #ifdef MANIFEST_DEBUG_MODE 
   fputs("Benign requester.\n", DEBUG);
   fflush(DEBUG);
