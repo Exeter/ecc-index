@@ -59,15 +59,16 @@ if __name__ == "__main__":
     request.endheaders()
     loaded = simplejson.loads(request.getresponse().read());
     for commit in loaded:
-      commit_list.append({
-        "committer":(commit["author"]["login"] if (commit["author"]) else commit["commit"]["author"]["name"]),
-        "user_link":(commit["author"]["html_url"] if (commit["author"]) else "mailto:%s" % commit["commit"]["author"]["email"]),
-        "timestamp":commit["commit"]["author"]["date"],
-        "link":commit["html_url"],
-        "message":commit["commit"]["message"]
-      })
-      if commit["commit"]["committer"]["date"] > new_since:
-         new_since = commit["commit"]["committer"]["date"]
+      if "message" not in commit:
+        commit_list.append({
+          "committer":(commit["author"]["login"] if (commit["author"]) else commit["commit"]["author"]["name"]),
+          "user_link":(commit["author"]["html_url"] if (commit["author"]) else "mailto:%s" % commit["commit"]["author"]["email"]),
+          "timestamp":commit["commit"]["author"]["date"],
+          "link":commit["html_url"],
+          "message":commit["commit"]["message"]
+        })
+        if commit["commit"]["committer"]["date"] > new_since:
+           new_since = commit["commit"]["committer"]["date"]
     if len(commit_list) > 0:
       final.append({
         "name": repository["name"],
