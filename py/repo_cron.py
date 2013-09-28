@@ -7,9 +7,10 @@ request.putrequest("GET", "/users/Exeter/repos")
 request.putheader("User-Agent", "dabbler0")
 request.endheaders()
 loaded = simplejson.loads(request.getresponse().read())
-print loaded
 
 project_list = []
+projects_file = open("/srv/http/github_projects.json", "w")
 for repository in loaded:
   project_list.append({"name":repository["name"], "url":repository["html_url"]})
-  open("/srv/http/projects.json", "w").write(simplejson.dumps({"projects":project_list}))
+projects_file.write(simplejson.dumps({"projects":project_list}))
+projects_file.close()

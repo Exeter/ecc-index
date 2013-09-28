@@ -33,11 +33,15 @@ if __name__=="__main__":
       """, (row[0], json.dumps(current_team)))
     else:
       u.execute("""
-        INSERT INTO projects (uname, projects) VALUES (?, ?)
+        INSERT INTO team (uname, projects) VALUES (?, ?)
       """, (member, json.dumps([name])))
   
   c.execute("""
-    INSERT INTO projects (name, team, github, path, analytics) VALUES (?, ?, ?, ?, ?)
-  """, (name, json.dumps(team), github, os.path.realpath("/srv/projects/" + name), json.dumps({"endpoints":{}, "urls":{}, "failures":[]})))
+    INSERT INTO projects (name, team, github, manifest, analytics) VALUES (?, ?, ?, ?, ?)
+  """, (name, json.dumps(team), github, os.path.realpath("/home/daemon/projects/" + name), json.dumps({"endpoints":{}, "urls":{}, "failures":[]})))
   
   conn.commit()
+  uconn.commit()
+
+  conn.close()
+  uconn.close()
