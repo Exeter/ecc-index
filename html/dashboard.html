@@ -177,7 +177,13 @@
             
             //Decrypt the data we just got
             data = JSON.parse(decrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), data));
-            console.log(data);
+
+            if (data == null) {
+              //If our sesskey is invalid, get a new one
+              delete localStorage["SRP_UNAME"];
+              delete localStorage["SRP_SESS_KEY"];
+              location.href = "/login.html";
+            }
             
             for (var i = 0; i < data.teams.length; i += 1) {
               inner_projects.append($("<div>").addClass("project").append(
