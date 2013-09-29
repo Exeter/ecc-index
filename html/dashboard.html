@@ -93,6 +93,7 @@
           for (key in data) {
             data_array.push([key, data[key]]);
           }
+          console.log(data_array);
           data_array.sort(function(a, b) { return b[1] - a[1] });
           data_array.unshift(labels);
           data = google.visualization.arrayToDataTable(data_array);
@@ -176,6 +177,7 @@
             
             //Decrypt the data we just got
             data = JSON.parse(decrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), data));
+            console.log(data);
             
             for (var i = 0; i < data.teams.length; i += 1) {
               inner_projects.append($("<div>").addClass("project").append(
@@ -337,6 +339,7 @@
         color:#000;
         border:1px solid #888;
         margin:10px;
+        overflow:auto;
       }
       span.failure_value {
         color:#000;

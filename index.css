@@ -201,7 +201,6 @@ a.ag_commit_committer {
 span.ag_commit_timestamp {
   padding-left:10px;
 }
-/*
 input.invisible_checkbox {
   display:none;
 }
@@ -211,7 +210,6 @@ label.invisible_checkbox_label {
 input.invisible_checkbox:checked + div.news_body {
   display:none;
 }
-*/
 input.collapser  {
   display: none;
   cursor: auto;

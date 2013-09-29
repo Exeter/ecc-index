@@ -8,6 +8,8 @@ import simplejson as json
 def parseManifest(manifest, url):
   manifest_file = open(manifest, "r")
   for line in manifest_file:
+    if line[0] == "#" or line[0] == "\n":
+      continue
     reg_mark = line.index(" ")
     com_mark = line.rindex(" ")
     match = re.match("^%s$" % line[:reg_mark], url)
@@ -31,7 +33,7 @@ if __name__ == "__main__":
 
   # Ensure that the wanted table exists
   c.execute("""
-    CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY ASC, name TEXT, team TEXT, github TEXT, path TEXT, analytics TEXT, updated TEXT)
+    CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY ASC, name TEXT, team TEXT, github TEXT, manifest TEXT, analytics TEXT, updated TEXT)
   """)
   
   """
@@ -44,6 +46,8 @@ if __name__ == "__main__":
   for line in url_dump:
     #sys.stdout.write(line)
     request = line[line.index("\"") + 1:line.rindex("\"")].split(" ")
+    if len(request) < 2:
+      continue
     index = request[1].find("?")
     if index > 0:
       request[1] = request[1][0:index]
@@ -79,7 +83,7 @@ if __name__ == "__main__":
       # Otherwise, load it from the database
       else:
         c.execute("""
-          SELECT * FROM projects WHERE path=?
+          SELECT * FROM projects WHERE manifest=?
         """, (realpath,))
         row = c.fetchone()
         if row is not None:
@@ -201,9 +205,11 @@ if __name__ == "__main__":
 
   # Save it all in our database
   for key in loaded:
+    print key
+    print json.dumps(loaded[key])
     if loaded[key] is not None:
      c.execute("""
-        UPDATE projects SET analytics=? WHERE path=?
+        UPDATE projects SET analytics=? WHERE manifest=?
       """, (json.dumps(loaded[key]), key))
   conn.commit()
   conn.close()

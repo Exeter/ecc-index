@@ -41,7 +41,7 @@ def format_post(data):
   """
 
 if __name__ == "__main__":
-  projects = simplejson.load(open("/srv/http/projects.json"))["projects"]
+  projects = simplejson.load(open("/srv/http/github_projects.json"))["projects"]
   since = simplejson.load(open("/srv/http/commit.json"))["since"]
   new_since = since
 
