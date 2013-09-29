@@ -175,6 +175,13 @@
           success: function(data) {
             var inner_projects = $("#inner_projects");
             
+            if (data.error == "NO ESTABLISHED SESSKEY") {
+              //If our sesskey is invalid, get a new one
+              delete localStorage["SRP_UNAME"];
+              delete localStorage["SRP_SESS_KEY"];
+              location.href = "/login.html";
+            }
+
             //Decrypt the data we just got
             data = JSON.parse(decrypt(CryptoJS.enc.Base64.parse(localStorage["SRP_SESS_KEY"]), data));
 
