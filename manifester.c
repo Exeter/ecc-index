@@ -901,6 +901,11 @@ static int run_manifest(request_rec *r, const char *filename) {
   long unsigned int manifest_line = MANIFEST_LINE;
   char *line = (char*) malloc (MANIFEST_LINE * sizeof(char));
 
+#ifdef MANIFEST_DEBUG_MODE
+  fprintf(DEBUG, "Opened manifest file; its pointer is %p\n", f);
+  fflush(DEBUG);
+#endif
+
   while (getline(&line, &manifest_line, f) > 0) {
     //Skip comments and empty lines
     if (line[0] == '#' || line[0] == '\n') continue;
@@ -982,6 +987,11 @@ static int run_manifest(request_rec *r, const char *filename) {
 
     return rc;
   }
+
+#ifdef MANIFEST_DEBUG_MODE
+  fputs("No matching lines.\n", DEBUG);
+  fflush(stdout);
+#endif
   
   //If there is no such manifest line, say so:
   return HTTP_NOT_FOUND;
