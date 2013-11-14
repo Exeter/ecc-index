@@ -611,7 +611,7 @@ static int run_dynamic(request_rec *r, const char *file) {
           else {
             //Otherwise, finalize and set the preceeding header value:
             header_value[s] = '\0';
-            apr_table_set(r->headers_out, header_name, header_value);
+            apr_table_add(r->headers_out, header_name, header_value);
 
             //Then reset our flags and parse the next line.
             s = 0;
